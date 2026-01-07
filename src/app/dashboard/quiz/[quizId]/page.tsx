@@ -31,6 +31,9 @@ export default async function QuizPage({ params }: { params: Promise<{ quizId: s
 
     if (!quiz) notFound()
 
+    // Ensure related course is loaded; otherwise treat as not found
+    if (!quiz.course) notFound()
+
     const isTeacher = quiz.course.teacherId === userId
     const isEnrolled = quiz.course.enrollments.length > 0
 

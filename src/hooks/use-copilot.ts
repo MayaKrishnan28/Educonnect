@@ -9,7 +9,7 @@ interface CopilotOptions {
     onStuck?: (context: string) => void
 }
 
-export function useCopilot(contentRef: RefObject<HTMLElement>, options: CopilotOptions) {
+export function useCopilot(contentRef: RefObject<HTMLElement | null>, options: CopilotOptions) {
     const { noteId, enabled, dwellThreshold = 30000, onStuck } = options
 
     // Internal state

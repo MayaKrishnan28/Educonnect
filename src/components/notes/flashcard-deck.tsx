@@ -58,7 +58,7 @@ export function FlashcardDeck({ cards, onClose }: FlashcardDeckProps) {
             scale: 0.8,
             transition: { duration: 0.3 }
         })
-    }
+    } as any;
 
     return (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm p-6">

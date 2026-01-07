@@ -3,7 +3,7 @@ import { cookies } from "next/headers"
 import { redirect, notFound } from "next/navigation"
 import { GlassCard } from "@/components/ui/glass-card"
 import { Button } from "@/components/ui/button"
-import { Users, BookOpen, Calendar, Settings, Plus, Sparkles } from "lucide-react"
+import { Users, BookOpen, Calendar, Settings, Plus, Sparkles, Lock } from "lucide-react"
 import { format } from "date-fns"
 import { CreateAssignmentDialog } from "@/components/lms/create-assignment-dialog"
 import { CreateQuizDialog } from "@/components/lms/create-quiz-dialog"
@@ -61,7 +61,7 @@ export default async function ClassPage({ params }: { params: Promise<{ code: st
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-4">
                 <div className="p-4 bg-red-500/10 rounded-full text-red-400">
-                    <lock className="w-8 h-8" />
+                    <Lock className="w-8 h-8" />
                 </div>
                 <h1 className="text-2xl font-bold">Access Denied</h1>
                 <p className="text-muted-foreground max-w-md">
