@@ -1,0 +1,18 @@
+[dotenv@17.2.3] injecting env (6) from .env -- tip: ≡ƒùé∩╕Å backup and recover secrets: https://dotenvx.com/ops
+--- TEST 1: Valid Teacher ---
+Testing OTP for sabi.sabi9102004@gmail.com as TEACHER
+User found: S A B I (TEACHER)
+Rate limit checks passed (simulated)
+Generated OTP: 984064
+Saving to DB...
+DB Updated.
+Sending Email...
+Message sent: <d9421e30-3915-e764-a6fb-76e75be06bd6@gmail.com>
+Email sent successfully.
+Result 1: { success: true }
+
+--- TEST 2: Wrong Role ---
+Testing OTP for sabi.sabi9102004@gmail.com as STUDENT
+User found: S A B I (TEACHER)
+Role mismatch: Expected STUDENT, got TEACHER
+Result 2: { success: false, error: 'Role mismatch.' }

@@ -1,0 +1,10 @@
+[dotenv@17.2.3] injecting env (6) from .env -- tip: ΓÜÖ∩╕Å  override existing env vars with { override: true }
+Starting Full OTP Flow Verification for sabi.sabi9102004@gmail.com
+Γ£à User Found: S A B I
+≡ƒöæ Generated Code: 201742
+Γ£à DB Logged OTP Hash
+≡ƒô¿ Sending Email...
+Γ£à Mail Sent! ID: <c5d2d452-ac39-992e-ffd2-7a6aac638320@gmail.com>
+≡ƒöì Verifying...
+Γ£à HASH MATCH! verification logic is sound.
+Γ£à Expiry Check Passed

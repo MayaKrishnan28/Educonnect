@@ -1,0 +1,29 @@
+import { NextResponse, NextRequest } from 'next/server'
+import { updateSession, decrypt } from '@/lib/auth'
+
+export async function middleware(request: NextRequest) {
+    const session = request.cookies.get('session')?.value
+
+    // 1. Check for session
+    if (!session) {
+        return NextResponse.redirect(new URL('/login', request.url))
+    }
+
+    // 2. Refresh session if valid (Optional, handled by updateSession helper logic or here)
+    // For now we just verify. Logic to extend expiry ideally runs here or we just accept '7d' fixed.
+
+    // 3. Role Protection (Teacher)
+    if (request.nextUrl.pathname.startsWith('/teacher')) {
+        const payload = await decrypt(session)
+        if (!payload || (payload.role !== 'TEACHER' && payload.role !== 'ADMIN')) {
+            return NextResponse.redirect(new URL('/dashboard', request.url))
+        }
+    }
+
+    // 4. Update session expiry (optional)
+    return await updateSession(request) || NextResponse.next()
+}
+
+export const config = {
+    matcher: ['/dashboard/:path*', '/teacher/:path*'],
+}
