@@ -11,11 +11,8 @@ export default async function StaffQuizPage({ params }: { params: Promise<{ quiz
 
     const { quizId } = await params
 
-    const quiz = await db.collection('quiz').findOne({ id: quizId }) as any
+    const quiz = (await db.collection('quiz').findOne({ id: quizId })) as any
     if (!quiz) notFound()
-
-    // Manual hydration because we are not using an ORM
-    quiz.questions = await db.collection('quiz').findOne({ id: quizId }).then(q => q?.questions || [])
     quiz.course = await db.collection('course').findOne({ id: quiz.courseId })
 
     const isStaff = quiz.course?.staffId === userId || quiz.course?.staffId?.toString() === userId

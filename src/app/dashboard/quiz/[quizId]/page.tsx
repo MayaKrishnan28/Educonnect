@@ -14,9 +14,8 @@ export default async function QuizPage({ params }: { params: Promise<{ quizId: s
 
     const { quizId } = await params
 
-    const quiz = await db.collection('quiz').findOne({ id: quizId }) as any
+    const quiz = (await db.collection('quiz').findOne({ id: quizId })) as any
     if (!quiz) notFound()
-    quiz.questions = await db.collection('quiz').findOne({ id: quizId }).then(q => q.questions)
     quiz.course = await db.collection('course').findOne({ id: quiz.courseId })
     const enrollments = await db.collection('enrollment').find({ courseId: quiz.courseId, userId }).limit(1).toArray()
     const isStaff = quiz.course?.staffId === userId
