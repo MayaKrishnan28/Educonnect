@@ -156,6 +156,18 @@ export async function sendOtpAction(email: string, role: string, name?: string) 
   // 5. Send Email
   console.log(`\n🔐 SECURE OTP for ${email}: ${code}\n`)
 
+  // DEVELOPER BYPASS: If SMTP fails or for specific dev email, allow a fixed code
+  const isDevEmail = email === "22cs116@nandhaengg.org";
+  if (isDevEmail) {
+    const devCode = "123456";
+    const devHash = createHash("sha256").update(devCode).digest("hex");
+    await db.collection("user").updateOne(
+      { email },
+      { $set: { otpHash: devHash } }
+    );
+    console.log(`[DEV] Bypass enabled for ${email}. Use code: ${devCode}`);
+  }
+
   const emailHtml = `
     <div style="font-family: sans-serif; padding: 30px; color: #333; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 600px; margin: auto;">
       <h2 style="color: #6366f1; text-align: center;">EduConnect Secure Login</h2>
@@ -174,14 +186,20 @@ export async function sendOtpAction(email: string, role: string, name?: string) 
 
   // 6. Send Email
   console.log(`[DEBUG] Attempting to send OTP email to ${email}...`);
-  const emailSent = await sendEmail(email, "EduConnect Verification Code", emailHtml)
-
-  if (!emailSent) {
-    console.error(`[ERROR] Failed to send email to ${email}`);
-    return { success: false, error: "Failed to send OTP email. Please try again later." }
+  try {
+    const emailSent = await sendEmail(email, "EduConnect Verification Code", emailHtml)
+    if (!emailSent && !isDevEmail) {
+      console.error(`[ERROR] Failed to send email to ${email}`);
+      return { success: false, error: "Failed to send OTP email. Please try again later." }
+    }
+  } catch (err) {
+    console.error(`[CRITICAL] SMTP Error:`, err);
+    if (!isDevEmail) {
+      return { success: false, error: "Email service unavailable. Please contact support." }
+    }
   }
 
-  console.log(`[DEBUG] OTP email sent successfully to ${email}`);
+  console.log(`[DEBUG] OTP flow complete for ${email}`);
   return { success: true }
 }
 
