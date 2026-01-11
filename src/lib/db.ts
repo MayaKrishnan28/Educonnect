@@ -1,7 +1,7 @@
 import { MongoClient, Db } from 'mongodb'
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017'
-const DB_NAME = process.env.MONGODB_DB || 'educonnect'
+const DB_NAME = (process.env.MONGODB_DB || 'educonnect').trim().replace(/^["']|["']$/g, '')
 
 type GlobalWithMongo = typeof globalThis & {
 	_mongoClient?: MongoClient
