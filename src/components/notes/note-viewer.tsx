@@ -32,9 +32,12 @@ interface NoteViewerProps {
     youtubeId?: string | null
     fileUrl?: string | null
     fileType?: string | null
+    multiFileUrls?: string[] | null
+    multiFileTypes?: string[] | null
+    userRole?: string
 }
 
-export function NoteViewer({ id, title, content, rawContent, authorName, isAuthor, youtubeId, fileUrl, fileType }: NoteViewerProps) {
+export function NoteViewer({ id, title, content, rawContent, authorName, isAuthor, youtubeId, fileUrl, fileType, multiFileUrls, multiFileTypes, userRole }: NoteViewerProps) {
     // Revision State
     const [isGeneratingRev, setIsGeneratingRev] = useState(false)
     const [flashcards, setFlashcards] = useState<any[] | null>(null)
@@ -69,7 +72,10 @@ export function NoteViewer({ id, title, content, rawContent, authorName, isAutho
     useEffect(() => {
         if (showHeatmap) {
             import("@/app/actions-heatmap").then(mod => {
-                mod.getHeatmapDataAction(id).then(pts => setHeatmapPoints(pts))
+                mod.getHeatmapDataAction(id).then(pts => {
+                    console.log("DEBUG: Heatmap Points Fetched:", pts)
+                    setHeatmapPoints(pts)
+                })
             })
         }
     }, [showHeatmap, id])
@@ -105,12 +111,12 @@ export function NoteViewer({ id, title, content, rawContent, authorName, isAutho
 
     // Copilot Logic
     const contentRef = useRef<HTMLDivElement>(null)
-    const [copilotEnabled, setCopilotEnabled] = useState(false)
+    const [copilotEnabled, setCopilotEnabled] = useState(true)
 
     useCopilot(contentRef, {
         noteId: id, // Pass ID for tracking
         enabled: copilotEnabled,
-        dwellThreshold: 15000,
+        dwellThreshold: 3000, // Reduced to 3s for testing
         onStuck: (context) => {
             toast("You seem to be focusing on this section...", {
                 description: "Want a simpler explanation?",
@@ -178,17 +184,79 @@ export function NoteViewer({ id, title, content, rawContent, authorName, isAutho
 
     return (
         <div className="relative min-h-[500px]">
-            {/* Author Controls */}
-            {isAuthor && (
-                <div className="absolute top-0 right-0 flex gap-2 z-20">
-                    <Button size="sm" variant="ghost" className="text-blue-400 hover:bg-blue-500/10" onClick={() => setIsEditing(true)}>
-                        <Edit2 className="w-4 h-4 mr-1" /> Edit
-                    </Button>
-                    <Button size="sm" variant="ghost" className="text-red-400 hover:bg-red-500/10" onClick={handleDelete} disabled={isPending}>
-                        <Trash2 className="w-4 h-4 mr-1" /> {isPending ? "Deleting..." : "Delete"}
-                    </Button>
+            {/* Premium Controls Overlay - Single Line Unified Layout */}
+            <div className="absolute top-0 right-0 z-20">
+                <div className="bg-[#0A0A0B]/80 backdrop-blur-xl p-1.5 rounded-xl border border-white/10 shadow-2xl flex items-center gap-1.5">
+                    {/* Student Tools: Study Copilot */}
+                    {userRole === "STUDENT" && (
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg">
+                            <Switch
+                                id="copilot-mini"
+                                checked={copilotEnabled}
+                                onCheckedChange={setCopilotEnabled}
+                                className="scale-75"
+                            />
+                            <label htmlFor="copilot-mini" className="flex items-center gap-1.5 cursor-pointer select-none">
+                                <Sparkles className={`w-3.5 h-3.5 ${copilotEnabled ? "text-purple-400" : "text-gray-500"}`} />
+                                <span className="text-[10px] font-bold uppercase tracking-tight text-white/90">Study Copilot</span>
+                            </label>
+                        </div>
+                    )}
+
+                    {userRole === "STUDENT" && <div className="w-px h-4 bg-white/10 mx-0.5" />}
+
+                    {/* Doubt Heatmap */}
+                    <button
+                        onClick={() => setShowHeatmap(!showHeatmap)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${showHeatmap
+                            ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                            : "text-gray-400 hover:text-white"
+                            }`}
+                    >
+                        <Flame className={`w-4 h-4 ${showHeatmap ? "animate-pulse" : ""}`} />
+                        <span className="text-[10px] font-bold uppercase tracking-tight">Heatmap</span>
+                    </button>
+
+                    {/* Revise Button (Student Only) */}
+                    {userRole === "STUDENT" && (
+                        <>
+                            <div className="w-px h-4 bg-white/10 mx-0.5" />
+                            <button
+                                onClick={handleRevise}
+                                disabled={isGeneratingRev}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 rounded-lg transition-all disabled:opacity-50"
+                            >
+                                <Zap className={`w-3.5 h-3.5 ${isGeneratingRev ? "animate-spin" : ""}`} />
+                                <span className="text-[10px] font-bold uppercase tracking-tight">{isGeneratingRev ? "..." : "Revise"}</span>
+                            </button>
+                        </>
+                    )}
+
+                    {isAuthor && <div className="w-px h-4 bg-white/10 mx-0.5" />}
+
+                    {/* Edit & Delete (Author Only) */}
+                    {isAuthor && (
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => setIsEditing(true)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors group"
+                            >
+                                <Edit2 className="w-3.5 h-3.5" />
+                                <span className="text-[10px] font-bold uppercase tracking-tight">Edit</span>
+                            </button>
+                            <div className="w-px h-4 bg-white/10 mx-0.5" />
+                            <button
+                                onClick={handleDelete}
+                                disabled={isPending}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors group"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span className="text-[10px] font-bold uppercase tracking-tight">{isPending ? "..." : "Delete"}</span>
+                            </button>
+                        </div>
+                    )}
                 </div>
-            )}
+            </div>
 
             <header className="mb-8 border-b border-white/10 pb-4 flex items-center justify-between">
                 <div>
@@ -199,40 +267,11 @@ export function NoteViewer({ id, title, content, rawContent, authorName, isAutho
                         <span>20 mins read</span>
                     </div>
                 </div>
-
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-full border border-white/10">
-                        <Switch id="copilot" checked={copilotEnabled} onCheckedChange={setCopilotEnabled} />
-                        <label htmlFor="copilot" className="text-sm font-medium cursor-pointer flex items-center gap-1.5 select-none">
-                            <Sparkles className={`w-3.5 h-3.5 ${copilotEnabled ? "text-purple-400" : "text-muted-foreground"}`} />
-                            Study Copilot
-                        </label>
-                    </div>
-
-                    <Button
-                        variant="ghost"
-                        className="bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 border border-yellow-500/20"
-                        onClick={handleRevise}
-                        disabled={isGeneratingRev}
-                    >
-                        <Zap className={`w-4 h-4 mr-2 ${isGeneratingRev ? "animate-spin" : ""}`} />
-                        {isGeneratingRev ? "Creating..." : "Revise"}
-                    </Button>
-
-                    <Button
-                        variant="outline"
-                        className={showHeatmap ? "bg-red-500/20 text-red-400 border-red-500/50" : ""}
-                        onClick={() => setShowHeatmap(!showHeatmap)}
-                    >
-                        <Flame className="w-4 h-4 mr-2" />
-                        {showHeatmap ? "Hide Heatmap" : "Doubt Heatmap"}
-                    </Button>
-                </div>
             </header>
 
             <div className="relative">
                 {/* Media Embeds */}
-                {fileType === 'YOUTUBE' && youtubeId && (
+                {youtubeId && (
                     <div className="mb-8 rounded-xl overflow-hidden shadow-2xl border border-white/10 aspect-video relative bg-black">
                         <iframe
                             width="100%"
@@ -246,12 +285,78 @@ export function NoteViewer({ id, title, content, rawContent, authorName, isAutho
                     </div>
                 )}
 
-                {/* Other File Attachments */}
-                {fileUrl && fileType !== 'YOUTUBE' && (
-                    <div className="mb-8 p-4 rounded-xl bg-white/5 border border-white/10 flex justify-between items-center group hover:bg-white/10 transition-colors">
+                {/* Direct Video Upload Playback (Multiple Support & Legacy) */}
+                {multiFileUrls ? multiFileUrls.map((url, index) => {
+                    const type = multiFileTypes?.[index];
+                    if (type === 'VIDEO') {
+                        return (
+                            <div key={`video-${index}`} className="mb-8 rounded-xl overflow-hidden shadow-2xl border border-white/10 bg-black">
+                                <video
+                                    src={url}
+                                    controls
+                                    className="w-full h-full"
+                                    style={{ maxHeight: '600px' }}
+                                />
+                                <div className="p-3 bg-white/5 border-t border-white/10 text-xs text-gray-400 text-center italic">
+                                    Video Lesson: {url.split('/').pop()?.split('-').slice(1).join('-')}
+                                </div>
+                            </div>
+                        )
+                    }
+                    return null;
+                }) : (fileUrl && fileType === 'VIDEO' && (
+                    <div className="mb-8 rounded-xl overflow-hidden shadow-2xl border border-white/10 bg-black">
+                        <video
+                            src={fileUrl}
+                            controls
+                            className="w-full h-full"
+                            style={{ maxHeight: '600px' }}
+                        />
+                    </div>
+                ))}
+
+                {/* Other File Attachments (Excluding Videos which are shown above) */}
+                {(multiFileUrls && multiFileUrls.length > 0) ? (
+                    <div className="space-y-3 mb-8">
+                        {multiFileUrls.map((url, index) => {
+                            const type = multiFileTypes?.[index] || 'FILE';
+                            if (type === 'VIDEO') return null; // Skip video as it's handled above
+
+                            const fileName = url.split('/').pop()?.split('-').slice(1).join('-') || 'Attachment';
+
+                            return (
+                                <div key={index} className="p-4 rounded-xl bg-white/5 border border-white/10 flex justify-between items-center group hover:bg-white/10 transition-colors shadow-lg shadow-black/20">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-3 bg-blue-500/10 rounded-lg text-blue-400">
+                                            {type === 'IMAGE' ? (
+                                                <Sparkles className="w-5 h-5" />
+                                            ) : type === 'VIDEO' ? (
+                                                <Zap className="w-5 h-5" />
+                                            ) : (
+                                                <StickyNote className="w-5 h-5" />
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="font-semibold text-sm text-white">{fileName}</p>
+                                            <p className="text-xs text-muted-foreground uppercase tracking-tight">{type} Resource</p>
+                                        </div>
+                                    </div>
+                                    <Button asChild size="sm" variant="ghost" className="text-blue-400 hover:text-blue-300 hover:bg-blue-400/10">
+                                        <a href={url} target="_blank" rel="noopener noreferrer">View Resource</a>
+                                    </Button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (fileUrl && fileType !== 'YOUTUBE' && fileType !== 'VIDEO') && (
+                    <div className="mb-8 p-4 rounded-xl bg-white/5 border border-white/10 flex justify-between items-center group hover:bg-white/10 transition-colors shadow-lg shadow-black/20">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-blue-500/20 rounded-lg text-blue-400">
-                                <StickyNote className="w-6 h-6" />
+                            <div className="p-3 bg-blue-500/10 rounded-lg text-blue-400">
+                                {fileType === 'IMAGE' ? (
+                                    <Sparkles className="w-6 h-6" />
+                                ) : (
+                                    <StickyNote className="w-6 h-6" />
+                                )}
                             </div>
                             <div>
                                 <p className="font-semibold text-white">Attached Resource</p>
@@ -282,7 +387,7 @@ export function NoteViewer({ id, title, content, rawContent, authorName, isAutho
                             {heatmapPoints.map((y, i) => (
                                 <div
                                     key={i}
-                                    className="absolute left-0 w-full h-[60px] bg-red-500/10 blur-xl rounded-full mix-blend-screen"
+                                    className="absolute left-0 w-full h-[60px] bg-red-500/40 blur-3xl rounded-full mix-blend-screen"
                                     style={{ top: `${y * 100}%` }}
                                 />
                             ))}
@@ -293,7 +398,7 @@ export function NoteViewer({ id, title, content, rawContent, authorName, isAutho
 
             {/* Floating AI Trigger */}
             <AnimatePresence>
-                {selection && !showAI && (
+                {selection && !showAI && userRole === "STUDENT" && (
                     <motion.div
                         initial={{ opacity: 0, scale: 0.8, y: 10 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}

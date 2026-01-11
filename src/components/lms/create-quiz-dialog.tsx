@@ -20,6 +20,7 @@ export function CreateQuizDialog({ courseId, children }: { courseId: string, chi
     const [topic, setTopic] = useState("")
     const [count, setCount] = useState("5")
     const [difficulty, setDifficulty] = useState("Medium")
+    const [youtubeLink, setYoutubeLink] = useState("")
 
     const handleGenerate = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -30,7 +31,7 @@ export function CreateQuizDialog({ courseId, children }: { courseId: string, chi
                 setGeneratedQuestions(res.questions)
                 setStep("PREVIEW")
             } else {
-                alert("Failed to generate quiz. Try again.")
+                alert(res.error || "Failed to generate quiz. Try again.")
             }
         } catch (error) {
             console.error(error)
@@ -46,13 +47,15 @@ export function CreateQuizDialog({ courseId, children }: { courseId: string, chi
                 courseId,
                 `${topic} Quiz`,
                 topic,
-                generatedQuestions
+                generatedQuestions,
+                youtubeLink
             )
             if (res.success) {
                 setOpen(false)
                 // Reset state
                 setStep("SETUP")
                 setTopic("")
+                setYoutubeLink("")
                 setGeneratedQuestions([])
             } else {
                 alert(res.error || "Failed to save quiz")
@@ -90,6 +93,16 @@ export function CreateQuizDialog({ courseId, children }: { courseId: string, chi
                                 value={topic}
                                 onChange={(e) => setTopic(e.target.value)}
                             />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Context Video (YouTube Link - Optional)</Label>
+                            <Input
+                                placeholder="https://youtube.com/watch?v=..."
+                                className="border-red-500/20 bg-red-500/5 focus:border-red-500/40"
+                                value={youtubeLink}
+                                onChange={(e) => setYoutubeLink(e.target.value)}
+                            />
+                            <p className="text-[10px] text-muted-foreground">Students can watch this video as reference while taking the quiz.</p>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">

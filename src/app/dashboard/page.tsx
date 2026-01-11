@@ -1,8 +1,9 @@
 import { GlassCard } from "@/components/ui/glass-card"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Book, Clock, Flame, TrendingUp, MoreHorizontal } from "lucide-react"
+import { Book, Clock, Flame, TrendingUp, MoreHorizontal, FileText, CheckCircle2 } from "lucide-react"
 import { getNotes, getCurrentUser } from "@/app/actions"
+import { getStudentTodoItemsAction } from "@/app/actions-lms"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 
@@ -13,6 +14,15 @@ export default async function DashboardPage() {
     }
 
     const notes = await getNotes()
+    const { items: todoItems } = await getStudentTodoItemsAction() || { items: [] }
+
+    // Combine and sort all recent activity
+    const allActivity = [
+        ...notes.map((n: any) => ({ ...n, type: 'note' })),
+        ...(todoItems || [])
+    ].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+    const recentActivity = allActivity.slice(0, 5)
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
@@ -28,7 +38,7 @@ export default async function DashboardPage() {
                 </Avatar>
             </div>
 
-            {/* Stats Grid - Kept visual for "Wow" factor */}
+            {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {[
                     { label: "Notes Available", value: notes.length.toString(), icon: Book, color: "text-blue-400" },
@@ -50,32 +60,52 @@ export default async function DashboardPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-6">
-                    <h2 className="text-xl font-semibold mb-4">Recent Class Notes</h2>
+                    <h2 className="text-xl font-semibold mb-4">Recent Activity</h2>
                     <div className="space-y-4">
-                        {notes.length === 0 ? (
+                        {allActivity.length === 0 ? (
                             <div className="p-8 text-center text-muted-foreground bg-white/5 rounded-xl border border-dashed border-white/10">
-                                No notes uploaded yet. Check back later!
+                                No activity recorded yet. Check back later!
                             </div>
                         ) : (
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            notes.map((note: any) => (
-                                <Link href={`/dashboard/notes/${note.id}`} key={note.id}>
-                                    <GlassCard className="flex items-center gap-4 hover:bg-white/5 transition-colors cursor-pointer group mb-4">
-                                        <div className="h-12 w-12 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
-                                            <Book size={20} />
-                                        </div>
-                                        <div className="flex-1">
-                                            <h4 className="font-medium">{note.title}</h4>
-                                            <p className="text-xs text-muted-foreground">
-                                                {new Date(note.createdAt).toLocaleDateString()} • {note.summary ? "AI Summary Ready" : "Processing..."}
-                                            </p>
-                                        </div>
-                                        <Button size="icon" variant="ghost">
-                                            <MoreHorizontal className="w-4 h-4" />
-                                        </Button>
-                                    </GlassCard>
-                                </Link>
-                            ))
+                            recentActivity.map((item: any) => {
+                                const isNote = item.type === 'note'
+                                const isAssignment = item.type === 'assignment'
+                                const isQuiz = item.type === 'quiz'
+
+                                let href = `/dashboard/notes/${item.id}`
+                                if (isAssignment) href = `/dashboard/classes/${item.courseCode}/assignments/${item.id}`
+                                if (isQuiz) href = `/dashboard/quiz/${item.id}`
+
+                                return (
+                                    <Link href={href} key={item.id + item.type}>
+                                        <GlassCard className="flex items-center gap-4 hover:bg-white/5 transition-colors cursor-pointer group mb-4">
+                                            <div className={`h-12 w-12 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform ${isNote ? "bg-indigo-500/20 text-indigo-400" :
+                                                isAssignment ? "bg-blue-500/20 text-blue-400" :
+                                                    "bg-purple-500/20 text-purple-400"
+                                                }`}>
+                                                {isNote ? <Book size={20} /> : isAssignment ? <FileText size={20} /> : <CheckCircle2 size={20} />}
+                                            </div>
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="font-medium">{item.title}</h4>
+                                                    {item.isDone && <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded uppercase font-bold">Done</span>}
+                                                    {item.isMissing && <span className="text-[10px] bg-red-500/20 text-red-100 px-1.5 py-0.5 rounded uppercase font-bold">Missing</span>}
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {isNote ? (
+                                                        `${new Date(item.createdAt).toLocaleDateString()} • ${item.summary ? "AI Summary Ready" : "Manual Note"}`
+                                                    ) : (
+                                                        `${item.courseName} • ${isAssignment ? 'Assignment' : 'Quiz'}`
+                                                    )}
+                                                </p>
+                                            </div>
+                                            <Button size="icon" variant="ghost">
+                                                <MoreHorizontal className="w-4 h-4" />
+                                            </Button>
+                                        </GlassCard>
+                                    </Link>
+                                )
+                            })
                         )}
                     </div>
                 </div>
@@ -88,14 +118,15 @@ export default async function DashboardPage() {
                             Latest Updates
                         </h3>
                         <div className="relative pl-4 space-y-8 border-l border-white/10 ml-2">
-                            {notes.slice(0, 3).length > 0 ? (
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                notes.slice(0, 3).map((note: any, i: number) => (
-                                    <div key={note.id} className="relative">
-                                        <div className={`absolute -left-[21px] top-1 h-3 w-3 rounded-full border-2 border-background ${i === 0 ? 'bg-blue-500 border-blue-500 animate-pulse' : 'bg-muted border-muted-foreground'
+                            {allActivity.slice(0, 4).length > 0 ? (
+                                allActivity.slice(0, 4).map((item: any, i: number) => (
+                                    <div key={item.id + item.type} className="relative">
+                                        <div className={`absolute -left-[21px] top-1 h-3 w-3 rounded-full border-2 border-background ${i === 0 ? 'bg-primary border-primary animate-pulse' : 'bg-muted border-muted-foreground'
                                             }`} />
-                                        <p className="text-sm font-medium truncate pr-4">{note.title}</p>
-                                        <p className="text-xs text-muted-foreground">Uploaded {new Date(note.createdAt).toLocaleDateString()}</p>
+                                        <p className="text-sm font-medium truncate pr-4">{item.title}</p>
+                                        <p className="text-xs text-muted-foreground capitalize">
+                                            {item.type} • {new Date(item.createdAt).toLocaleDateString()}
+                                        </p>
                                     </div>
                                 ))
                             ) : (

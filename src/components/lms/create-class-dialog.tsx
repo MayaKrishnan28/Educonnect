@@ -26,6 +26,8 @@ export function CreateClassDialog() {
     // Form state
     const [name, setName] = useState("")
     const [desc, setDesc] = useState("")
+    const [subjectCode, setSubjectCode] = useState("")
+    const [staffName, setStaffName] = useState("")
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -33,11 +35,13 @@ export function CreateClassDialog() {
         setError("")
 
         try {
-            const res = await createClassAction(name, desc)
+            const res = await createClassAction(name, desc, subjectCode, staffName)
             if (res.success) {
                 setOpen(false)
                 setName("")
                 setDesc("")
+                setSubjectCode("")
+                setStaffName("")
             } else {
                 setError(res.error || "Failed")
             }
@@ -71,10 +75,34 @@ export function CreateClassDialog() {
                             id="name"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            placeholder="e.g. Advanced Physics 101"
+                            placeholder="e.g. Advanced Physics"
                             required
                             className="bg-zinc-900 border-white/10"
                         />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="subjectCode">Subject Code</Label>
+                            <Input
+                                id="subjectCode"
+                                value={subjectCode}
+                                onChange={(e) => setSubjectCode(e.target.value)}
+                                placeholder="e.g. PHY101"
+                                required
+                                className="bg-zinc-900 border-white/10"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="staffName">Staff Name</Label>
+                            <Input
+                                id="staffName"
+                                value={staffName}
+                                onChange={(e) => setStaffName(e.target.value)}
+                                placeholder="e.g. Dr. Smith"
+                                required
+                                className="bg-zinc-900 border-white/10"
+                            />
+                        </div>
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="desc">Description (Optional)</Label>

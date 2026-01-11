@@ -67,7 +67,7 @@ export default async function InsightsPage() {
                             <p className="text-muted-foreground text-center py-8">No data available.</p>
                         ) : (
                             subjects.map((sub) => {
-                                const percentage = ((sub.count / totalNotes) * 100).toFixed(0);
+                                const percentage = totalNotes > 0 ? ((sub.count / totalNotes) * 100).toFixed(0) : "0";
                                 return (
                                     <div key={sub.name} className="space-y-2">
                                         <div className="flex justify-between text-sm">

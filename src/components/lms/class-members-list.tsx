@@ -24,18 +24,18 @@ export function ClassMembersList({ courseId }: { courseId: string }) {
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {members.map((member) => (
-                <GlassCard key={member.id} className="p-4 flex items-center gap-4 hover:bg-white/5 transition-colors">
-                    <Avatar className={`h-10 w-10 border ${member.isTeacher ? 'border-yellow-500/50' : 'border-white/10'}`}>
+            {members.map((member, idx) => (
+                <GlassCard key={member.id || member._id || idx} className="p-4 flex items-center gap-4 hover:bg-white/5 transition-colors">
+                    <Avatar className={`h-10 w-10 border ${member.isStaff ? 'border-yellow-500/50' : 'border-white/10'}`}>
                         <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${member.email}`} />
                         <AvatarFallback>{member.name?.[0]}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 overflow-hidden">
                         <div className="flex items-center gap-2">
                             <h4 className="font-semibold text-sm truncate">{member.name}</h4>
-                            {member.isTeacher && (
+                            {member.isStaff && (
                                 <span className="bg-yellow-500/10 text-yellow-500 text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-                                    <Crown className="w-3 h-3" /> Teacher
+                                    <Crown className="w-3 h-3" /> Staff
                                 </span>
                             )}
                         </div>

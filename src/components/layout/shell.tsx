@@ -2,11 +2,12 @@
 
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Menu, X, BookOpen, Clock, Activity, Settings, LogOut, GraduationCap, LayoutDashboard, School } from "lucide-react"
+import { Menu, X, BookOpen, Clock, Activity, Settings, LogOut, GraduationCap, LayoutDashboard, School, Users, ListTodo } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { logoutAction } from "@/app/actions"
 
 interface SidebarItem {
     icon: React.ElementType
@@ -14,18 +15,28 @@ interface SidebarItem {
     href: string
 }
 
-const items: SidebarItem[] = [
+const navigationItems: SidebarItem[] = [
     { icon: LayoutDashboard, label: "Home", href: "/dashboard" },
     { icon: School, label: "Classes", href: "/dashboard/classes" },
-    // Notes moved to within Classes
+    { icon: ListTodo, label: "To-do", href: "/dashboard/todo" },
     { icon: Clock, label: "Timeline", href: "/dashboard/timeline" },
     { icon: Activity, label: "Insights", href: "/dashboard/insights" },
     { icon: Settings, label: "Settings", href: "/dashboard/settings" },
 ]
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, userRole }: { children: React.ReactNode, userRole?: string }) {
     const [isOpen, setIsOpen] = useState(true)
     const pathname = usePathname()
+
+    const isStaff = userRole === "STAFF" || userRole === "ADMIN"
+
+    const items = isStaff
+        ? [
+            { icon: Users, label: "Staff Center", href: "/staff" },
+            { icon: School, label: "My Classes", href: "/staff/classes" },
+            { icon: Settings, label: "Settings", href: "/staff/settings" },
+        ]
+        : navigationItems
 
     return (
         <div className="min-h-screen bg-background text-foreground flex overflow-hidden selection:bg-primary/20">
@@ -81,12 +92,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
 
                 <div className="p-4 border-t border-white/10">
-                    <Link href="/login">
-                        <Button variant="ghost" className={cn("w-full flex items-center gap-2 text-red-400 hover:text-red-300 hover:bg-red-500/10", !isOpen && "justify-center px-0")}>
-                            <LogOut className="w-5 h-5" />
-                            {isOpen && "Logout"}
-                        </Button>
-                    </Link>
+                    <Button
+                        variant="ghost"
+                        onClick={() => logoutAction()}
+                        className={cn("w-full flex items-center gap-2 text-red-400 hover:text-red-300 hover:bg-red-500/10", !isOpen && "justify-center px-0")}
+                    >
+                        <LogOut className="w-5 h-5" />
+                        {isOpen && "Logout"}
+                    </Button>
                 </div>
 
                 {/* Toggle Button */}

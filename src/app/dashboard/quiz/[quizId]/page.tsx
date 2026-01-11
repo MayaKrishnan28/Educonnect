@@ -1,5 +1,5 @@
 
-import { db as prisma } from "@/lib/db"
+import { db } from "@/lib/db"
 import { notFound, redirect } from "next/navigation"
 import { QuizInterface } from "@/components/lms/quiz-interface"
 // Helper to get userId wrapper since actions-lms getUserId is not exported or async
@@ -14,30 +14,15 @@ export default async function QuizPage({ params }: { params: Promise<{ quizId: s
 
     const { quizId } = await params
 
-    const quiz = await prisma.quiz.findUnique({
-        where: { id: quizId },
-        include: {
-            questions: true,
-            course: {
-                include: {
-                    enrollments: {
-                        where: { userId },
-                        select: { id: true }
-                    }
-                }
-            }
-        }
-    })
-
+    const quiz = await db.collection('quiz').findOne({ id: quizId }) as any
     if (!quiz) notFound()
+    quiz.questions = await db.collection('quiz').findOne({ id: quizId }).then(q => q.questions)
+    quiz.course = await db.collection('course').findOne({ id: quiz.courseId })
+    const enrollments = await db.collection('enrollment').find({ courseId: quiz.courseId, userId }).limit(1).toArray()
+    const isStaff = quiz.course?.staffId === userId
+    const isEnrolled = enrollments.length > 0
 
-    // Ensure related course is loaded; otherwise treat as not found
-    if (!quiz.course) notFound()
-
-    const isTeacher = quiz.course.teacherId === userId
-    const isEnrolled = quiz.course.enrollments.length > 0
-
-    if (!isTeacher && !isEnrolled) {
+    if (!isStaff && !isEnrolled) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-[#0A0A0A] text-center space-y-4">
                 <h1 className="text-2xl font-bold text-red-500">Access Denied</h1>
@@ -46,9 +31,12 @@ export default async function QuizPage({ params }: { params: Promise<{ quizId: s
         )
     }
 
+    // Sanitize for Client Component
+    const sanitizedQuiz = JSON.parse(JSON.stringify(quiz))
+
     return (
         <div className="min-h-screen bg-[#0A0A0A] text-white p-6 md:p-12">
-            <QuizInterface quiz={quiz} />
+            <QuizInterface quiz={sanitizedQuiz} />
         </div>
     )
 }

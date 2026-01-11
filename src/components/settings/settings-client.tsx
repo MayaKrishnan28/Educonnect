@@ -211,7 +211,16 @@ function ProfileSettings({ user }: { user: any }) {
                         value={user.email}
                         className="bg-white/5 border-white/10 opacity-50 cursor-not-allowed"
                     />
-                    <p className="text-xs text-muted-foreground">Email cannot be changed securely in this demo.</p>
+                    <p className="text-xs text-muted-foreground">Your email is permanently linked to your {user.role?.toLowerCase() || "user"} account and cannot be changed.</p>
+                </div>
+                <div className="grid gap-2">
+                    <Label>Account Role</Label>
+                    <Input
+                        disabled
+                        value={user.role || "STUDENT"}
+                        className="bg-white/5 border-white/10 opacity-50 cursor-not-allowed uppercase font-mono"
+                    />
+                    <p className="text-xs text-muted-foreground">This account is strictly for {user.role === "STAFF" ? "Academic Instruction & Monitoring" : "Learning & Research"}.</p>
                 </div>
                 <div className="flex justify-end pt-4">
                     <Button type="submit" disabled={isPending}>

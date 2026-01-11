@@ -43,7 +43,7 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           {children}
-          {userId && <GlobalMax />}
+          {userId && session?.role === "STAFF" && <GlobalMax />}
           <Toaster />
         </ThemeProvider>
       </body>

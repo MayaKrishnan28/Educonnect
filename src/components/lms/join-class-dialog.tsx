@@ -55,7 +55,7 @@ export function JoinClassDialog() {
                 <DialogHeader>
                     <DialogTitle>Join a Class</DialogTitle>
                     <DialogDescription>
-                        Enter the 6-character code provided by your teacher.
+                        Enter the 6-character code provided by your staff.
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 py-4">

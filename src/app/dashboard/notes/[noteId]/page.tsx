@@ -1,7 +1,7 @@
 import { NoteViewer } from "@/components/notes/note-viewer"
 import { getNoteById } from "@/app/actions"
 import { notFound, redirect } from "next/navigation"
-import { db as prisma } from "@/lib/db"
+import { db } from "@/lib/db"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { Lock } from "lucide-react"
@@ -11,22 +11,26 @@ export default async function NotePage({ params }: { params: Promise<{ noteId: s
     const { noteId } = await params
 
     // Fetch Note with Auth Data
-    const note = await prisma.note.findUnique({
-        where: { id: noteId },
-        include: {
-            author: true,
-            course: {
-                include: {
-                    enrollments: {
-                        // We need the ID to check enrollment
-                        select: { userId: true }
-                        // Wait, previous logic was: where: { userId: ... }
-                        // Let's refactor to fetch enrollments and filter in JS or use current user ID properly
-                    }
-                }
-            }
+    let note = await db.collection('note').findOne({ id: noteId }) as any
+
+    // Fallback: try finding by _id if id not found (for legacy notes)
+    if (!note) {
+        try {
+            const { ObjectId } = await import("mongodb")
+            note = await db.collection('note').findOne({ _id: new ObjectId(noteId) }) as any
+            if (note) note.id = note._id.toString() // Ensure id property exists for frontend
+        } catch (e) {
+            // Invalid ObjectId format, ignore
         }
-    })
+    }
+
+    if (note) {
+        note.author = await db.collection('user').findOne({ id: note.authorId })
+        if (note.courseId) {
+            note.course = await db.collection('course').findOne({ id: note.courseId })
+            note.course.enrollments = await db.collection('enrollment').find({ courseId: note.courseId }).toArray()
+        }
+    }
 
     if (!note) {
         return notFound()
@@ -41,7 +45,7 @@ export default async function NotePage({ params }: { params: Promise<{ noteId: s
     // The previous Prisma query filtered enrollments by userId.
     // Let's do that again but with the secure userId.
 
-    const isEnrolled = note.course?.enrollments.some(e => e.userId === userId)
+    const isEnrolled = note.course?.enrollments.some((e: any) => e.userId === userId)
     // If note belongs to a course, enforce enrollment or authorship
     if (note.courseId && !isAuthor && !isEnrolled) {
         return (
@@ -84,11 +88,14 @@ export default async function NotePage({ params }: { params: Promise<{ noteId: s
                 title={note.title}
                 content={displayContent}
                 rawContent={note.content} // Pass raw content for editing
-                authorName={note.author?.name || "Unknown Teacher"}
+                authorName={note.author?.name || "Unknown Staff"}
                 isAuthor={isAuthor}
+                userRole={session?.role}
                 youtubeId={(note as any).youtubeId} // Pass YouTube ID
                 fileUrl={note.fileUrl}
                 fileType={note.fileType}
+                multiFileUrls={note.multiFileUrls}
+                multiFileTypes={note.multiFileTypes}
             />
         </div>
     )

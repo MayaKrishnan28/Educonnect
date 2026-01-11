@@ -11,6 +11,7 @@ import { encrypt, getSession } from "@/lib/auth"
 // --- Auth Actions ---
 // --- Auth Actions ---
 import { createHash } from "crypto"
+import { ObjectId } from "mongodb"
 
 
 export async function checkSessionAction() {
@@ -18,31 +19,93 @@ export async function checkSessionAction() {
   return !!session
 }
 
-export async function sendOtpAction(email: string, role: string) {
-  console.log(`[DEBUG] OTP Request - Email: '${email}', Role: '${role}'`) // Debug Log
-  if (!email) return { success: false, error: "Email is required" }
+export async function checkEmailAction(email: string) {
+  if (!db) return { success: false, error: "Database error" }
+  const user = await db.collection("user").findOne({ email })
+  // If user exits and has a password, they are an existing user
+  return { success: true, exists: !!(user && user.password) }
+}
 
-  // 1. Strict Pre-registration Check
-  const user = await db.user.findUnique({ where: { email } })
-  if (!user) {
-    // Security: Do not reveal if email exists?
-    // User Requirement: If the email is NOT found, show: "Email not registered. Please contact admin."
-    return { success: false, error: "Email not registered. Please contact admin." }
+export async function loginWithPasswordAction(formData: FormData) {
+  const email = formData.get("email") as string
+  const password = formData.get("password") as string
+  const role = formData.get("role") as string
+
+  if (!email || !password) return { success: false, error: "Missing fields" }
+
+  const user = await db.collection("user").findOne({ email })
+  if (!user) return { success: false, error: "User not found" }
+
+  if (user.password !== password) {
+    return { success: false, error: "Invalid password" }
   }
 
-  // 1b. Role Check (Prevent Student logging in as Teacher account owner?)
-  // Requirement: "Student login works only for role = student"
-  // If user tries to login as Teacher but is actually Student in DB -> should we block sending OTP?
-  // Yes, to prevent role confusion or enumeration.
+  // Role check
   if (user.role !== role) {
-    if (role === "TEACHER" && user.role === "STUDENT") {
-      return { success: false, error: "Access Denied: You are not a Teacher." }
+    return { success: false, error: `Unauthorized role. You are a ${user.role}.` }
+  }
+
+  // Set session
+  const cookieStore = await cookies()
+  const sessionToken = await encrypt({
+    userId: user._id.toString(),
+    role: user.role,
+    email: user.email,
+    name: user.name
+  })
+
+  cookieStore.set("session", sessionToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+  })
+
+  if (user.role === 'STAFF') {
+    redirect("/staff")
+  } else {
+    redirect("/dashboard")
+  }
+}
+
+export async function sendOtpAction(email: string, role: string, name?: string) {
+  console.log(`[DEBUG] sendOtpAction called for: ${email}, role: ${role}`);
+
+  if (!db) {
+    console.error("[ERROR] Database object is not initialized!");
+    return { success: false, error: "Database error. Please try again." }
+  }
+
+  // 1. Check if user exists, if not, create them (Registration)
+  let user = await db.collection("user").findOne({ email })
+  console.log(`[DEBUG] Database lookup result for ${email}:`, user ? "User Found" : "User Not Found");
+
+  if (!user) {
+    console.log(`[DEBUG] Registering new ${role}: ${email}`);
+    const newUser = {
+      email,
+      role,
+      name: name || email.split('@')[0], // Use provided name or default
+      isVerified: false,
+      createdAt: new Date(),
+      otpSendCount: 0,
+      otpAttempts: 0
     }
-    if (role === "STUDENT" && user.role === "TEACHER") {
-      return { success: false, error: "Access Denied: You are a Teacher (Please use Teacher login)." }
+    await db.collection("user").insertOne(newUser)
+    user = await db.collection("user").findOne({ email })
+  }
+
+  // Final check to satisfy TypeScript
+  if (!user) {
+    return { success: false, error: "System error: Could not verify account." }
+  }
+
+  // 1b. Strict Role Enforcement
+  if (user && user.role !== role) {
+    console.log(`[DEBUG] Role mismatch for ${email}. Expected: ${user.role}, Attempted: ${role}`);
+    return {
+      success: false,
+      error: `This account is registered as a ${user.role}. Please select the correct role to login.`
     }
-    // General fallthrough
-    return { success: false, error: "Role mismatch. Please contact admin." }
   }
 
   // 2. Rate Limiting (Max 3 per 10 minutes)
@@ -76,48 +139,61 @@ export async function sendOtpAction(email: string, role: string) {
   const expiresAt = new Date(now.getTime() + 5 * 60 * 1000) // 5 minutes
 
   // 4. Update User DB
-  await db.user.update({
-    where: { id: user.id },
-    data: {
-      otpHash,
-      otpExpiresAt: expiresAt,
-      otpLastSentAt: now,
-      otpSendCount: currentCount + 1,
-      otpResetAt: user.otpResetAt && user.otpResetAt > now ? user.otpResetAt : new Date(now.getTime() + 10 * 60 * 1000), // Reset window 10 min from start of window
-      otpAttempts: 0 // Reset attempts on new OTP
+  await db.collection("user").updateOne(
+    { email: user.email },
+    {
+      $set: {
+        otpHash,
+        otpExpiresAt: expiresAt,
+        otpLastSentAt: now,
+        otpSendCount: currentCount + 1,
+        otpResetAt: user.otpResetAt && user.otpResetAt > now ? user.otpResetAt : new Date(now.getTime() + 10 * 60 * 1000),
+        otpAttempts: 0
+      }
     }
-  })
+  )
 
   // 5. Send Email
-  console.log(`\n🔐 SECURE OTP for ${email}: ${code}\n`) // Debug Logging
+  console.log(`\n🔐 SECURE OTP for ${email}: ${code}\n`)
 
   const emailHtml = `
-    <div style="font-family: sans-serif; padding: 20px; color: #333;">
-      <h1 style="color: #6366f1;">EduConnect Secure Login</h1>
-      <p>Your verification code is:</p>
-      <div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 20px 0;">${code}</div>
-      <p>This code expires in 5 minutes.</p>
-      <p style="font-size: 12px; color: #666;">If you did not request this, please ignore it.</p>
+    <div style="font-family: sans-serif; padding: 30px; color: #333; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 600px; margin: auto;">
+      <h2 style="color: #6366f1; text-align: center;">EduConnect Secure Login</h2>
+      <p style="text-align: center; color: #64748b;">Use the code below to verify your identity and set up your account.</p>
+      
+      <div style="background-color: #f8fafc; padding: 25px; border-radius: 12px; text-align: center; margin: 25px 0; border: 1px dashed #cbd5e1;">
+        <div style="font-size: 42px; font-weight: 800; letter-spacing: 10px; color: #1e293b; font-family: monospace;">${code}</div>
+        <p style="margin-top: 10px; font-size: 14px; color: #94a3b8;">This code will expire in 5 minutes</p>
+      </div>
+
+      <p style="font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.5;">
+        This is an automated message. If you didn't request a login code, please secure your account.
+      </p>
     </div>
   `
 
-  const emailSent = await sendEmail(email, "EduConnect Verification Code", emailHtml) // Capture result
+  // 6. Send Email
+  console.log(`[DEBUG] Attempting to send OTP email to ${email}...`);
+  const emailSent = await sendEmail(email, "EduConnect Verification Code", emailHtml)
 
   if (!emailSent) {
+    console.error(`[ERROR] Failed to send email to ${email}`);
     return { success: false, error: "Failed to send OTP email. Please try again later." }
   }
 
+  console.log(`[DEBUG] OTP email sent successfully to ${email}`);
   return { success: true }
 }
 
 export async function verifyOtpAction(formData: FormData) {
   const email = formData.get("email") as string
   const code = formData.get("code") as string
-  const role = formData.get("role") as string
+  const password = formData.get("password") as string
+  const isSettingPassword = formData.has("password")
 
   if (!email || !code) return { success: false, error: "Missing required fields" }
 
-  const user = await db.user.findUnique({ where: { email } })
+  const user = await db.collection("user").findOne({ email })
   if (!user) return { success: false, error: "User not found" }
 
   const now = new Date()
@@ -140,39 +216,54 @@ export async function verifyOtpAction(formData: FormData) {
 
     if (newAttempts >= 3) {
       // Lock Account
-      await db.user.update({
-        where: { id: user.id },
-        data: {
-          otpAttempts: newAttempts,
-          lockedUntil: new Date(now.getTime() + 10 * 60 * 1000) // Lock for 10 mins
+      await db.collection("user").updateOne(
+        { email: user.email },
+        {
+          $set: {
+            otpAttempts: newAttempts,
+            lockedUntil: new Date(now.getTime() + 10 * 60 * 1000) // Lock for 10 mins
+          }
         }
-      })
+      )
       return { success: false, error: "Invalid OTP. Account locked for 10 minutes." }
     } else {
-      await db.user.update({
-        where: { id: user.id },
-        data: { otpAttempts: newAttempts }
-      })
+      await db.collection("user").updateOne(
+        { email: user.email },
+        { $set: { otpAttempts: newAttempts } }
+      )
       return { success: false, error: `Invalid OTP. ${3 - newAttempts} attempts remaining.` }
     }
   }
 
-  // 4. Success!
-  // Clear OTP fields
-  await db.user.update({
-    where: { id: user.id },
-    data: {
-      otpHash: null,
-      otpExpiresAt: null,
-      otpAttempts: 0,
-      isVerified: true
-    }
-  })
+  // 4. If we are setting a password, we need to check if it's provided
+  if (!isSettingPassword) {
+    // If we just verified OTP but didn't provide password yet,
+    // tell the client it was successful so they can show password fields
+    return { success: true, needsPassword: true }
+  }
 
-  // 5. Create Session
+  if (!password || password.length < 6) {
+    return { success: false, error: "Password must be at least 6 characters" }
+  }
+
+  // 5. Success! Clear OTP fields and set password
+  await db.collection("user").updateOne(
+    { email: user.email },
+    {
+      $set: {
+        password: password, // Store plain text as per user request (though hashing is standard)
+        otpHash: null,
+        otpExpiresAt: null,
+        otpAttempts: 0,
+        isVerified: true
+      }
+    }
+  )
+
+  // 6. Create Session
   const cookieStore = await cookies()
   const sessionToken = await encrypt({
-    userId: user.id,
+    userId: user._id.toString(),
     role: user.role,
     email: user.email,
     name: user.name
@@ -184,8 +275,12 @@ export async function verifyOtpAction(formData: FormData) {
     expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
   })
 
-  // 6. Redirect
-  redirect(`/dashboard`)
+  // 7. Redirect
+  if (user.role === 'STAFF') {
+    redirect("/staff")
+  } else {
+    redirect("/dashboard")
+  }
 }
 
 export async function logoutAction() {
@@ -202,13 +297,55 @@ export async function updateUserAction(formData: FormData) {
 
   if (!userId) throw new Error("Unauthorized");
 
-  await db.user.update({
-    where: { id: userId },
-    data: { name }
-  })
+  await db.collection("user").updateOne(
+    { _id: new ObjectId(userId) },
+    { $set: { name } }
+  )
 
   revalidatePath("/dashboard")
   revalidatePath("/dashboard/settings")
+}
+
+// --- Course Actions ---
+export async function createCourseAction(formData: FormData) {
+  const name = formData.get("name") as string
+  const section = formData.get("section") as string
+  const description = formData.get("description") as string
+
+  const session = await getSession();
+  const userId = session?.userId;
+
+  if (!userId || session.role !== "STAFF") {
+    throw new Error("Unauthorized: Only staff can create courses");
+  }
+
+  // Generate a unique 6-character code
+  const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+  const courseId = new ObjectId().toHexString();
+
+  await db.collection("course").insertOne({
+    id: courseId,
+    name,
+    section,
+    description,
+    code,
+    staffId: userId,
+    createdAt: new Date(),
+  })
+
+  revalidatePath("/staff")
+  revalidatePath("/dashboard")
+  revalidatePath("/dashboard/classes")
+}
+
+export async function getStaffCourses() {
+  const session = await getSession();
+  const userId = session?.userId;
+  if (!userId) return [];
+
+  const courses = await db.collection("course").find({ staffId: userId }).sort({ createdAt: -1 }).toArray();
+  return JSON.parse(JSON.stringify(courses.map(c => ({ ...c, id: c._id.toString() }))));
 }
 
 // --- Note Actions ---
@@ -216,6 +353,8 @@ export async function createNoteAction(formData: FormData) {
   const title = formData.get("title") as string
   const content = formData.get("content") as string
   const subject = formData.get("subject") as string || "General" // Capture Subject
+  const youtubeLink = formData.get("youtubeLink") as string
+  const file = formData.get("file") as File | null
 
   const session = await getSession();
   const userId = session?.userId;
@@ -225,17 +364,52 @@ export async function createNoteAction(formData: FormData) {
   // Call Real AI
   const aiSummary = await generateSummary(`${title}\n\n${content}`);
 
-  await db.note.create({
-    data: {
-      title,
-      content,
-      subject, // Save Subject
-      summary: aiSummary,
-      authorId: userId
+  let youtubeId = null;
+  if (youtubeLink) {
+    // Basic regex for YouTube ID extraction
+    const match = youtubeLink.match(/(?:youtu\.be\/|youtube\.com\/watch\?v=)([^&]+)/);
+    if (match) youtubeId = match[1];
+  }
+
+  let fileUrl = null;
+  let fileType = null;
+
+  if (file && file.size > 0) {
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      const buffer = Buffer.from(arrayBuffer)
+      const fileName = `${Date.now()}-${file.name.replace(/[^a-z0-9.]/gi, '_')}`
+      const uploadDir = "./public/uploads"
+      const filePath = `${uploadDir}/${fileName}`
+
+      const fs = await import("fs")
+      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
+      fs.writeFileSync(filePath, buffer)
+      fileUrl = `/uploads/${fileName}`
+      fileType = file.type || "unknown"
+    } catch (err) {
+      console.error("Note File Upload Error:", err)
+      // Continue without file if fail? Or throw?
     }
+  }
+
+  const noteId = new ObjectId().toHexString();
+
+  await db.collection("note").insertOne({
+    id: noteId,
+    title,
+    content,
+    subject, // Save Subject
+    summary: aiSummary,
+    authorId: userId,
+    youtubeId,
+    fileUrl,
+    fileType,
+    createdAt: new Date(),
+    updatedAt: new Date()
   })
 
-  revalidatePath("/teacher")
+  revalidatePath("/staff")
   revalidatePath("/dashboard")
   revalidatePath("/dashboard/subjects")
 }
@@ -243,6 +417,7 @@ export async function createNoteAction(formData: FormData) {
 export async function explainTextAction(text: string, context: string) {
   const session = await getSession();
   const userId = session?.userId;
+
   if (!userId) throw new Error("Unauthorized");
 
   // Call Real AI
@@ -257,6 +432,7 @@ export async function explainTextAction(text: string, context: string) {
 export async function chatWithAIAction(query: string, context: string) {
   const session = await getSession();
   const userId = session?.userId;
+
   if (!userId) {
     console.error("Chat Action: Unauthorized - No Session User ID")
     throw new Error("Unauthorized")
@@ -275,54 +451,63 @@ export async function getNotes() {
   const userId = session?.userId;
   if (!userId) return [];
 
-  return await db.note.findMany({
-    where: {
-      OR: [
-        { authorId: userId },
-        {
-          course: {
-            enrollments: {
-              some: { userId: userId }
-            }
-          }
-        }
-      ]
-    },
-    orderBy: { createdAt: 'desc' },
-    include: { author: true }
-  })
+  const notes = await db.collection("note").find({
+    $or: [
+      { authorId: userId },
+      { "course.enrollments.userId": userId } // Note: MongoDB pathing depends on how course is stored
+    ]
+  }).sort({ createdAt: -1 }).toArray();
+
+  return JSON.parse(JSON.stringify(notes.map(n => ({ ...n, id: n._id.toString() }))));
 }
 
 export async function getSubjects() {
-  // Group notes by subject to finding active subjects
-  // Prisma SQLite doesn't support distinct on specific columns well in older versions or finding distinct nicely without raw
-  // We'll fetch all and dedup in JS for prototype speed or use groupBy if available
-  const notes = await db.note.findMany({
-    select: { subject: true }
-  });
+  const session = await getSession();
+  const userId = session?.userId;
+  if (!userId) return [];
 
-  // Count occurrences
+  const notes = await db.collection("note").find({
+    $or: [
+      { authorId: userId },
+      { "course.enrollments.userId": userId }
+    ]
+  }, {
+    projection: { subject: true }
+  }).toArray();
+
   const subjectCounts: Record<string, number> = {};
   notes.forEach(n => {
-    subjectCounts[n.subject] = (subjectCounts[n.subject] || 0) + 1;
+    const subjectName = n.subject || "General";
+    subjectCounts[subjectName] = (subjectCounts[subjectName] || 0) + 1;
   });
 
   return Object.entries(subjectCounts).map(([name, count]) => ({ name, count }));
 }
 
 export async function getNotesBySubject(subject: string) {
-  return await db.note.findMany({
-    where: { subject },
-    orderBy: { createdAt: 'desc' },
-    include: { author: true }
-  })
+  const session = await getSession();
+  const userId = session?.userId;
+  if (!userId) return [];
+
+  const notes = await db.collection("note").find({
+    subject,
+    $or: [
+      { authorId: userId },
+      { "course.enrollments.userId": userId }
+    ]
+  }).sort({ createdAt: -1 }).toArray();
+
+  return JSON.parse(JSON.stringify(notes.map(n => ({ ...n, id: n._id.toString() }))));
 }
 
 export async function getNoteById(id: string) {
-  return await db.note.findUnique({
-    where: { id },
-    include: { author: true }
-  })
+  try {
+    const note = await db.collection("note").findOne({ _id: new ObjectId(id) });
+    if (!note) return null;
+    return JSON.parse(JSON.stringify({ ...note, id: note._id.toString() }));
+  } catch (e) {
+    return null;
+  }
 }
 
 export async function deleteNoteAction(noteId: string) {
@@ -330,31 +515,48 @@ export async function deleteNoteAction(noteId: string) {
   const userId = session?.userId;
   if (!userId) throw new Error("Unauthorized");
 
-  const note = await db.note.findUnique({ where: { id: noteId } });
+  // Support both custom 'id' field and MongoDB '_id'
+  let note = await db.collection("note").findOne({ id: noteId });
+  if (!note) {
+    try {
+      note = await db.collection("note").findOne({ _id: new ObjectId(noteId) });
+    } catch (e) { }
+  }
+
   if (!note || note.authorId !== userId) {
     throw new Error("Unauthorized to delete this note");
   }
 
-  await db.note.delete({ where: { id: noteId } });
+  await db.collection("note").deleteOne({ _id: note._id });
   revalidatePath("/dashboard");
-  revalidatePath("/teacher");
-  redirect("/dashboard"); // Redirect after delete
+  revalidatePath("/staff");
+  if (session.role === 'STAFF') {
+    redirect("/staff")
+  } else {
+    redirect("/dashboard")
+  }
 }
 
 export async function updateNoteAction(noteId: string, title: string, content: string) {
-  const cookieStore = await cookies();
-  const userId = cookieStore.get("userId")?.value;
+  const session = await getSession();
+  const userId = session?.userId;
   if (!userId) throw new Error("Unauthorized");
 
-  const note = await db.note.findUnique({ where: { id: noteId } });
+  let note = await db.collection("note").findOne({ id: noteId });
+  if (!note) {
+    try {
+      note = await db.collection("note").findOne({ _id: new ObjectId(noteId) });
+    } catch (e) { }
+  }
+
   if (!note || note.authorId !== userId) {
     throw new Error("Unauthorized to update this note");
   }
 
-  await db.note.update({
-    where: { id: noteId },
-    data: { title, content }
-  });
+  await db.collection("note").updateOne(
+    { _id: note._id },
+    { $set: { title, content, updatedAt: new Date() } }
+  );
 
   revalidatePath(`/dashboard/notes/${noteId}`);
   revalidatePath("/dashboard");
@@ -364,5 +566,47 @@ export async function getCurrentUser() {
   const session = await getSession();
   const userId = session?.userId;
   if (!userId) return null;
-  return await db.user.findUnique({ where: { id: userId } })
+  try {
+    const user = await db.collection("user").findOne({ _id: new ObjectId(userId) })
+    if (!user) return null;
+
+    // Sanitize for Client Components (Serializing ObjectIDs and Dates)
+    return JSON.parse(JSON.stringify(user));
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function switchRoleAction() {
+  const session = await getSession();
+  const userId = session?.userId;
+  if (!userId) return { success: false, error: "Unauthorized" };
+
+  const user = await db.collection("user").findOne({ _id: new ObjectId(userId) });
+  if (!user) return { success: false, error: "User not found" };
+
+  const newRole = user.role === "STUDENT" ? "STAFF" : "STUDENT";
+
+  await db.collection("user").updateOne(
+    { _id: new ObjectId(userId) },
+    { $set: { role: newRole } }
+  );
+
+  // Update session cookie
+  const cookieStore = await cookies();
+  const sessionToken = await encrypt({
+    userId: user._id.toString(),
+    role: newRole,
+    email: user.email,
+    name: user.name
+  });
+
+  cookieStore.set("session", sessionToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+  });
+
+  revalidatePath("/");
+  return { success: true, newRole };
 }

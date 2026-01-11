@@ -47,8 +47,8 @@ export function DeleteClassButton({ courseId, courseName }: DeleteClassButtonPro
     return (
         <AlertDialog>
             <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="w-full gap-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 border-red-500/50">
-                    <Trash2 className="w-4 h-4" /> Delete Class
+                <Button variant="destructive" className="w-full gap-2 bg-[#D15555] hover:bg-[#b04545] text-white border-0 font-medium rounded-lg h-12">
+                    <Trash2 className="w-5 h-5 opacity-80" /> Delete Class
                 </Button>
             </AlertDialogTrigger>
             <AlertDialogContent className="bg-black/90 border-white/10 text-white">
@@ -56,16 +56,18 @@ export function DeleteClassButton({ courseId, courseName }: DeleteClassButtonPro
                     <AlertDialogTitle className="flex items-center gap-2 text-red-400">
                         <AlertTriangle className="w-5 h-5" /> Danger Zone
                     </AlertDialogTitle>
-                    <AlertDialogDescription className="text-white/70">
-                        Are you sure you want to delete <strong>{courseName}</strong>?
-                        <br /><br />
-                        This action cannot be undone. This will permanently delete the class and remove all associated data, including:
-                        <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
-                            <li>All Assignments and Submissions</li>
-                            <li>All Quizzes and Results</li>
-                            <li>All Class Notes</li>
-                            <li>All Student Enrollments</li>
-                        </ul>
+                    <AlertDialogDescription asChild className="text-white/70">
+                        <div className="text-sm">
+                            Are you sure you want to delete <strong>{courseName}</strong>?
+                            <br /><br />
+                            This action cannot be undone. This will permanently delete the class and remove all associated data, including:
+                            <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
+                                <li>All Assignments and Submissions</li>
+                                <li>All Quizzes and Results</li>
+                                <li>All Class Notes</li>
+                                <li>All Student Enrollments</li>
+                            </ul>
+                        </div>
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

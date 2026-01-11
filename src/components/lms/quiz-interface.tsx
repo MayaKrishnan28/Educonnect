@@ -29,10 +29,16 @@ interface QuizInterfaceProps {
             code: string
         } | null
     }
+    basePath?: string
 }
 
-export function QuizInterface({ quiz }: QuizInterfaceProps) {
+export function QuizInterface({ quiz, basePath = "/dashboard" }: QuizInterfaceProps) {
     const [currentIndex, setCurrentIndex] = useState(0)
+    // ...
+    // Update links to use basePath
+    // Line 49
+    // <Link href={quiz.course ? `${basePath}/classes/${quiz.course.code}` : `${basePath}/classes`} className="w-full">
+    // ...
     const [selectedOption, setSelectedOption] = useState<number | null>(null)
     const [isSubmitted, setIsSubmitted] = useState(false)
     const [score, setScore] = useState(0)
@@ -46,7 +52,7 @@ export function QuizInterface({ quiz }: QuizInterfaceProps) {
                     <AlertCircle className="w-16 h-16 mx-auto text-yellow-500/50" />
                     <h1 className="text-2xl font-bold">No Questions Found</h1>
                     <p className="text-muted-foreground">This quiz doesn't have any questions yet.</p>
-                    <Link href={quiz.course ? `/dashboard/classes/${quiz.course.code}` : "/dashboard/classes"} className="w-full">
+                    <Link href={quiz.course ? `${basePath}/classes/${quiz.course.code}` : `${basePath}/classes`} className="w-full">
                         <Button className="w-full bg-purple-600 hover:bg-purple-500">
                             Back to Class
                         </Button>
@@ -86,7 +92,7 @@ export function QuizInterface({ quiz }: QuizInterfaceProps) {
                     </div>
 
                     <div className="flex gap-2">
-                        <Link href={quiz.course ? `/dashboard/classes/${quiz.course.code}` : "/dashboard/classes"} className="w-full">
+                        <Link href={quiz.course ? `${basePath}/classes/${quiz.course.code}` : `${basePath}/classes`} className="w-full">
                             <Button className="w-full bg-purple-600 hover:bg-purple-500">
                                 Back to Class
                             </Button>
@@ -179,12 +185,19 @@ export function QuizInterface({ quiz }: QuizInterfaceProps) {
                         </div>
                     </div>
 
-                    <div className="flex gap-2">
-                        <Link href={quiz.course ? `/dashboard/classes/${quiz.course.code}` : "/dashboard/classes"} className="w-full">
+                    <div className="flex flex-col sm:flex-row gap-4">
+                        <Link href={quiz.course ? `${basePath}/classes/${quiz.course.code}` : `${basePath}/classes`} className="flex-1">
                             <Button className="w-full bg-purple-600 hover:bg-purple-500">
                                 Back to Class
                             </Button>
                         </Link>
+                        {basePath === "/staff" && (
+                            <Link href={`/staff/quiz/${quiz.id}/results`} className="flex-1">
+                                <Button variant="outline" className="w-full border-white/10 hover:bg-white/5">
+                                    View Detailed Results
+                                </Button>
+                            </Link>
+                        )}
                     </div>
                 </GlassCard>
             </div>
@@ -208,6 +221,21 @@ export function QuizInterface({ quiz }: QuizInterfaceProps) {
                     </div>
                 </div>
             </div>
+
+            {/* YouTube Context Video */}
+            {(quiz as any).youtubeId && (
+                <div className="mb-8 rounded-xl overflow-hidden shadow-2xl border border-white/10 aspect-video relative bg-black">
+                    <iframe
+                        width="100%"
+                        height="100%"
+                        src={`https://www.youtube.com/embed/${(quiz as any).youtubeId}`}
+                        title={quiz.title}
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                    ></iframe>
+                </div>
+            )}
 
             {/* Progress Bar */}
             <div className="h-1 bg-white/10 rounded-full overflow-hidden">

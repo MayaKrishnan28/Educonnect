@@ -52,7 +52,7 @@ async function safeGenerate(systemPrompt: string, userPrompt: string): Promise<s
 // --- Exported Functions (Same Interface) ---
 
 export async function generateSummary(text: string) {
-  const system = "You are an expert educational assistant. Summarize the provided content in 3-4 concise bullet points. Make it engaging for a student.";
+  const system = "You are an expert educational assistant. Summarize the provided content in exactly 4 concise bullet points. Each bullet should start with a '*'. Ensure the summary is complete and not truncated. Make it engaging for a student.";
   return await safeGenerate(system, text);
 }
 
@@ -104,7 +104,14 @@ export async function generateQuizQuestions(topic: string, count: number = 5, di
 
   const result = await safeGenerate(system, "Generate the quiz now.");
   // Clean up potential markdown formatting if the model disobeys
-  const cleanJson = result.replace(/```json/g, '').replace(/```/g, '').trim();
+  let cleanJson = result.replace(/```json/g, '').replace(/```/g, '').trim();
+
+  // Try to find the array if there's extra text
+  const arrayMatch = cleanJson.match(/\[[\s\S]*\]/);
+  if (arrayMatch) {
+    cleanJson = arrayMatch[0];
+  }
+
   return cleanJson;
 }
 

@@ -11,7 +11,7 @@ interface PageProps {
 
 export default async function AssignmentPage({ params }: PageProps) {
     const { code, assignmentId } = await params
-    const { success, assignment, submission, isTeacher, error } = await getAssignmentDetailsAction(assignmentId)
+    const { success, assignment, submission, isStaff, error } = await getAssignmentDetailsAction(assignmentId)
 
     if (!success || !assignment) {
         // Handle error (could redirects or show error UI)
@@ -46,7 +46,7 @@ export default async function AssignmentPage({ params }: PageProps) {
                             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground items-center">
                                 <div className="flex items-center gap-1.5">
                                     <User className="w-4 h-4" />
-                                    <span>{assignment.course.teacher.name}</span>
+                                    <span>{assignment.course.staff.name}</span>
                                 </div>
                                 <div className="w-1 h-1 rounded-full bg-white/20" />
                                 <span>{assignment.points} points</span>
@@ -83,11 +83,11 @@ export default async function AssignmentPage({ params }: PageProps) {
                         </div>
                     </div>
 
-                    {/* RIGHT COLUMN: Submission or Teacher View */}
+                    {/* RIGHT COLUMN: Submission or Staff View */}
                     <div className="lg:col-span-1">
-                        {isTeacher ? (
+                        {isStaff ? (
                             <GlassCard className="p-6">
-                                <h3 className="text-xl font-semibold mb-4 text-primary">Teacher View</h3>
+                                <h3 className="text-xl font-semibold mb-4 text-primary">Staff View</h3>
                                 <p className="text-muted-foreground mb-4">
                                     You can view all student submissions in the main class dashboard or by clicking below.
                                 </p>

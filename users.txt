@@ -2,3 +2,7 @@ Email: demo_student@edu.com | Role: STUDENT
 Email: demo_teacher@edu.com | Role: TEACHER
 Email: 22cs082@nandhaengg.org | Role: STUDENT
 Email: sabi.sabi9102004@gmail.com | Role: TEACHER
+Email: 22cs116@nandhaengg.org | Role: TEACHER
+Email: 22cs115@nandhaengg.org | Role: TEACHER
+Email: 22cs120@nandhaengg.org | Role: TEACHER
+Email: krishnanmaya174@gmail.com | Role: TEACHER

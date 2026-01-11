@@ -1,4 +1,5 @@
-import { db as prisma } from "@/lib/db"
+import { db } from "@/lib/db"
+import { ObjectId } from "mongodb"
 import { cookies } from "next/headers"
 import { redirect, notFound } from "next/navigation"
 import { GlassCard } from "@/components/ui/glass-card"
@@ -28,36 +29,65 @@ export default async function ClassPage({ params }: { params: Promise<{ code: st
     const { code } = await params
 
     // Fetch Class Details with Enrollment Check
-    const classData = await prisma.course.findUnique({
-        where: { code },
-        include: {
-            teacher: { select: { id: true, name: true, email: true } },
-            assignments: { orderBy: { createdAt: 'desc' } },
-            quizzes: { orderBy: { createdAt: 'desc' }, include: { _count: { select: { questions: true } } } },
-            notes: { orderBy: { createdAt: 'desc' }, include: { author: { select: { name: true } } } },
-            _count: { select: { enrollments: true } },
-            enrollments: {
-                where: { userId },
-                select: { id: true }
-            }
-        }
-    })
-
+    const classData = await db.collection('course').findOne({ code }) as any
     if (!classData) notFound()
 
-    const isTeacher = classData.teacherId === userId
-    const isEnrolled = classData.enrollments.length > 0
+    // Populate related fields
+    const classId = classData.id || classData._id.toString()
+    classData.id = classId // Ensure ID exists for client
+
+
+    // Better staff lookup (handle both id and _id)
+    let staff = await db.collection('user').findOne({ id: classData.staffId })
+    if (!staff) {
+        try {
+            staff = await db.collection('user').findOne({ _id: new ObjectId(classData.staffId) })
+        } catch (e) { }
+    }
+    classData.staff = staff
+
+    classData.assignments = await db.collection('assignment').find({ courseId: classId }).sort({ createdAt: -1 }).toArray()
+    classData.quizzes = await db.collection('quiz').find({ courseId: classId }).sort({ createdAt: -1 }).toArray()
+    classData.notes = await db.collection('note').find({ courseId: classId }).sort({ createdAt: -1 }).toArray()
+
+    // Populate authors for notes
+    classData.notes = await Promise.all(classData.notes.map(async (note: any) => {
+        let author = await db.collection('user').findOne({ id: note.authorId })
+        if (!author) {
+            try {
+                author = await db.collection('user').findOne({ _id: new ObjectId(note.authorId) })
+            } catch (e) { }
+        }
+        return { ...note, author: author || { name: "Unknown" } }
+    }))
+
+    classData._count = { enrollments: await db.collection('enrollment').countDocuments({ courseId: classId }) }
+
+    // Robust enrollment check (check both potential IDs)
+    const possibleCourseIds = [classData.id, classData._id.toString()].filter(Boolean)
+    const enrollmentsForUser = await db.collection('enrollment').find({
+        courseId: { $in: possibleCourseIds },
+        userId
+    }).limit(1).toArray()
+    classData.enrollments = enrollmentsForUser
+
+    // CRITICAL: Serialize for Client Components (removes ObjectIDs and Date methods)
+    const serializedClass = JSON.parse(JSON.stringify(classData))
+
+    // Robust staff check
+    const isStaff = (serializedClass.staffId === userId) || (classData.staffId?.toString() === userId)
+    const isEnrolled = serializedClass.enrollments.length > 0
 
     console.log("--- DEBUG CLASS PERMISSIONS ---")
     console.log("Class Code:", code)
     console.log("Current User ID:", userId)
-    console.log("Class Teacher ID:", classData.teacherId)
-    console.log("Is Teacher?", isTeacher)
+    console.log("Class Staff ID:", serializedClass.staffId)
+    console.log("Is Staff?", isStaff)
     console.log("Is Enrolled?", isEnrolled)
     console.log("-------------------------------")
 
-    // SECURITY CHECK: Must be Teacher OR Enrolled
-    if (!isTeacher && !isEnrolled) {
+    // SECURITY CHECK: Must be Staff OR Enrolled
+    if (!isStaff && !isEnrolled) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-4">
                 <div className="p-4 bg-red-500/10 rounded-full text-red-400">
@@ -78,29 +108,29 @@ export default async function ClassPage({ params }: { params: Promise<{ code: st
 
     // Merge feedItems ( Assignments + Quizzes )
     const feedItems = [
-        ...classData.assignments.map(a => ({ ...a, type: 'assignment' as const })),
-        ...classData.quizzes.map(q => ({ ...q, type: 'quiz' as const }))
-    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        ...serializedClass.assignments.map((a: any) => ({ ...a, type: 'assignment' as const })),
+        ...serializedClass.quizzes.map((q: any) => ({ ...q, type: 'quiz' as const }))
+    ].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Banner */}
             <div className="relative h-48 rounded-xl overflow-hidden bg-gradient-to-r from-violet-600 to-indigo-600 p-8 flex flex-col justify-end shadow-2xl">
                 <div className="absolute top-4 right-4 flex gap-2 items-center">
-                    {isTeacher && <EditClassDialog course={classData} />}
+                    {isStaff && <EditClassDialog course={serializedClass} />}
                     <div className="bg-black/20 backdrop-blur-sm px-4 py-2 rounded-full font-mono text-sm border border-white/10 text-white">
-                        Code: <strong>{classData.code}</strong>
+                        Code: <strong>{serializedClass.code}</strong>
                     </div>
                 </div>
-                <h1 className="text-4xl font-bold text-white mb-2">{classData.name}</h1>
+                <h1 className="text-4xl font-bold text-white mb-2">{serializedClass.name}</h1>
                 <div className="flex items-center gap-4 text-white/80 text-sm">
                     <span className="flex items-center gap-1">
-                        <Users className="w-4 h-4" /> {classData._count.enrollments} Students
+                        <Users className="w-4 h-4" /> {serializedClass._count.enrollments} Students
                     </span>
                     <span className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" /> Created {format(classData.createdAt, 'MMM d, yyyy')}
+                        <Calendar className="w-4 h-4" /> Created {format(new Date(serializedClass.createdAt), 'MMM d, yyyy')}
                     </span>
-                    <span>Teacher: {classData.teacher.name}</span>
+                    <span>Staff: {serializedClass.staff?.name || "Unknown Staff"}</span>
                 </div>
             </div>
 
@@ -116,15 +146,15 @@ export default async function ClassPage({ params }: { params: Promise<{ code: st
 
                         <TabsContent value="stream" className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
                             {/* Actions Row */}
-                            {isTeacher && (
+                            {isStaff && (
                                 <div className="flex flex-wrap gap-4">
-                                    <CreateAssignmentDialog courseId={classData.id}>
+                                    <CreateAssignmentDialog courseId={serializedClass.id}>
                                         <Button className="bg-purple-600 hover:bg-purple-500 shadow-lg shadow-purple-500/20">
                                             <Plus className="w-4 h-4 mr-2" /> Post Assignment
                                         </Button>
                                     </CreateAssignmentDialog>
 
-                                    <CreateQuizDialog courseId={classData.id}>
+                                    <CreateQuizDialog courseId={serializedClass.id}>
                                         <Button variant="outline" className="border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/10">
                                             <Sparkles className="w-4 h-4 mr-2" /> Create Quiz
                                         </Button>
@@ -143,7 +173,7 @@ export default async function ClassPage({ params }: { params: Promise<{ code: st
                                         <p className="text-muted-foreground">No updates, assignments, or quizzes yet.</p>
                                     </div>
                                 ) : (
-                                    feedItems.map(item => (
+                                    feedItems.map((item: any) => (
                                         <GlassCard key={item.id} className="p-6 hover:border-purple-500/30 transition-colors relative overflow-hidden group">
                                             <div className={`absolute top-0 left-0 w-1 h-full ${item.type === 'assignment' ? 'bg-purple-500' : 'bg-indigo-500'}`} />
                                             <div className="flex justify-between items-start pl-2">
@@ -159,11 +189,11 @@ export default async function ClassPage({ params }: { params: Promise<{ code: st
                                                     </div>
                                                     <div className="flex justify-between items-start">
                                                         <h3 className="font-bold text-lg mb-1">{item.title}</h3>
-                                                        {isTeacher && (
+                                                        {isStaff && (
                                                             <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                 <DeleteLMSItemButton
                                                                     id={item.id}
-                                                                    courseId={classData.id}
+                                                                    courseId={serializedClass.id}
                                                                     itemName={item.type === 'assignment' ? "Assignment" : "Quiz"}
                                                                     action={item.type === 'assignment' ? deleteAssignmentAction : deleteQuizAction}
                                                                 />
@@ -187,7 +217,7 @@ export default async function ClassPage({ params }: { params: Promise<{ code: st
                                                     </Button>
                                                 ) : (
                                                     <div className="flex gap-2">
-                                                        {isTeacher && (
+                                                        {isStaff && (
                                                             <Link href={`/dashboard/quiz/${item.id}/results`}>
                                                                 <Button variant="outline" size="sm" className="hover:bg-white/5 border-purple-500/30 text-purple-300">
                                                                     Results & Analytics
@@ -196,7 +226,7 @@ export default async function ClassPage({ params }: { params: Promise<{ code: st
                                                         )}
                                                         <Link href={`/dashboard/quiz/${item.id}`}>
                                                             <Button variant="ghost" size="sm" className="hover:bg-white/5">
-                                                                {isTeacher ? "Preview Quiz" : "Start Quiz →"}
+                                                                {isStaff ? "Preview Quiz" : "Start Quiz →"}
                                                             </Button>
                                                         </Link>
                                                     </div>
@@ -213,8 +243,8 @@ export default async function ClassPage({ params }: { params: Promise<{ code: st
                                 <h2 className="text-xl font-semibold flex items-center gap-2">
                                     <BookOpen className="w-5 h-5 text-emerald-400" /> Class Bookshelf
                                 </h2>
-                                {isTeacher && (
-                                    <CreateClassNoteDialog courseId={classData.id}>
+                                {isStaff && (
+                                    <CreateClassNoteDialog courseId={serializedClass.id}>
                                         <Button className="bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/20">
                                             <StickyNote className="w-4 h-4 mr-2" /> Upload Note / File
                                         </Button>
@@ -222,14 +252,14 @@ export default async function ClassPage({ params }: { params: Promise<{ code: st
                                 )}
                             </div>
 
-                            {classData.notes.length === 0 ? (
+                            {serializedClass.notes.length === 0 ? (
                                 <div className="text-center py-12 border border-dashed border-white/10 rounded-lg">
                                     <p className="text-muted-foreground">No notes found for this class.</p>
                                     <p className="text-sm text-muted-foreground mt-2">Share lecture notes, summaries, or materials here.</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {classData.notes.map(note => (
+                                    {serializedClass.notes.map((note: any) => (
                                         <div key={note.id} className="relative group/card h-full">
                                             {/* WRAPPER DIV for positioning actions */}
                                             <Link
@@ -277,12 +307,12 @@ export default async function ClassPage({ params }: { params: Promise<{ code: st
                                             </Link>
 
                                             {/* ACTION BUTTONS ABSOLUTE POSITIONED */}
-                                            {isTeacher && (
+                                            {isStaff && (
                                                 <div className="absolute top-2 right-2 flex gap-1 z-20 opacity-0 group-hover/card:opacity-100 transition-opacity">
-                                                    <EditClassNoteDialog note={{ ...note, content: note.content || "" }} courseId={classData.id} />
+                                                    <EditClassNoteDialog note={{ ...note, content: note.content || "" }} courseId={serializedClass.id} />
                                                     <DeleteLMSItemButton
                                                         id={note.id}
-                                                        courseId={classData.id}
+                                                        courseId={serializedClass.id}
                                                         itemName="Note"
                                                         action={deleteClassNoteAction}
                                                     />
@@ -300,7 +330,7 @@ export default async function ClassPage({ params }: { params: Promise<{ code: st
                                     <Users className="w-5 h-5 text-blue-400" /> Class Members
                                 </h2>
                             </div>
-                            <ClassMembersList courseId={classData.id} />
+                            <ClassMembersList courseId={serializedClass.id} />
                         </TabsContent>
                     </Tabs>
                 </div>
@@ -310,17 +340,17 @@ export default async function ClassPage({ params }: { params: Promise<{ code: st
                     <GlassCard className="p-6 space-y-4">
                         <h3 className="font-semibold text-lg border-b border-white/10 pb-2">About Class</h3>
                         <p className="text-sm text-muted-foreground">
-                            {classData.description || "No description provided."}
+                            {serializedClass.description || "No description provided."}
                         </p>
                     </GlassCard>
 
-                    {isTeacher && (
+                    {isStaff && (
                         <GlassCard className="p-6 space-y-4 border-red-500/20">
                             <h3 className="font-semibold text-lg text-red-400 border-b border-white/10 pb-2">Danger Zone</h3>
                             <p className="text-sm text-muted-foreground">
                                 Deleting this class will remove all data permanently.
                             </p>
-                            <DeleteClassButton courseId={classData.id} courseName={classData.name} />
+                            <DeleteClassButton courseId={serializedClass.id} courseName={serializedClass.name} />
                         </GlassCard>
                     )}
                 </div>

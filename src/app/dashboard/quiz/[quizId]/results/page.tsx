@@ -9,7 +9,7 @@ export default async function QuizResultsPage({ params }: { params: Promise<{ qu
     const { quizId } = await params
     const session = await getSession()
 
-    if (!session || (session.role !== "TEACHER" && session.role !== "ADMIN")) {
+    if (!session || (session.role !== "STAFF" && session.role !== "ADMIN")) {
         redirect("/dashboard")
     }
 

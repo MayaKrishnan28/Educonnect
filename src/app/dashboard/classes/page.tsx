@@ -1,6 +1,7 @@
 
 import { getUserClassesAction, createClassAction, joinClassAction } from "@/app/actions-lms"
-import { db as prisma } from "@/lib/db"
+import { ObjectId } from "mongodb"
+import { db } from "@/lib/db"
 import { Button } from "@/components/ui/button"
 import { GlassCard } from "@/components/ui/glass-card"
 import { BookOpen, Plus, Users, School } from "lucide-react"
@@ -18,13 +19,11 @@ export default async function ClassesPage() {
     if (!userId) redirect("/login")
 
     // Fetch User Role
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { role: true }
-    })
+    const userDoc = await db.collection('user').findOne({ _id: new ObjectId(userId) })
+    const user = JSON.parse(JSON.stringify(userDoc))
 
     const { teaching, enrolled } = await getUserClassesAction()
-    const isTeacher = user?.role === "TEACHER" || user?.role === "ADMIN"
+    const isStaff = user?.role === "STAFF" || user?.role === "ADMIN"
 
     return (
         <div className="space-y-8 p-8 pt-6 animate-in fade-in duration-500">
@@ -38,8 +37,8 @@ export default async function ClassesPage() {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <JoinClassDialog />
-                    {isTeacher && <CreateClassDialog />}
+                    {!isStaff && <JoinClassDialog />}
+                    {isStaff && <CreateClassDialog />}
                 </div>
             </div>
 
@@ -48,10 +47,10 @@ export default async function ClassesPage() {
                 <div className="space-y-4">
                     <h3 className="text-xl font-semibold flex items-center gap-2">
                         <School className="w-5 h-5 text-purple-400" />
-                        Teached Classes
+                        Teaching Classes
                     </h3>
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {teaching.map((cls) => (
+                        {teaching.map((cls: any) => (
                             <Link href={`/dashboard/classes/${cls.code}`} key={cls.id}>
                                 <GlassCard className="h-full hover:border-purple-500/50 transition-colors p-6 cursor-pointer group">
                                     <div className="flex justify-between items-start mb-4">
@@ -77,42 +76,47 @@ export default async function ClassesPage() {
                 </div>
             )}
 
-            {/* Enrolled Section */}
-            <div className="space-y-4">
-                <h3 className="text-xl font-semibold flex items-center gap-2">
-                    <BookOpen className="w-5 h-5 text-blue-400" />
-                    Enrolled Classes
-                </h3>
-                {enrolled.length === 0 ? (
-                    <div className="text-center py-12 border border-dashed border-white/10 rounded-lg">
-                        <School className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                        <h3 className="text-lg font-medium">No classes yet</h3>
-                        <p className="text-muted-foreground mb-4">Join a class to get started!</p>
-                        <JoinClassDialog />
-                    </div>
-                ) : (
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {enrolled.map((cls) => (
-                            <Link href={`/dashboard/classes/${cls.code}`} key={cls.id}>
-                                <GlassCard className="h-full hover:border-blue-500/50 transition-colors p-6 cursor-pointer group">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className="h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                            <BookOpen className="w-6 h-6 text-blue-400" />
-                                        </div>
-                                        <div className="px-2 py-1 rounded-md bg-white/5 text-xs text-muted-foreground border border-white/10">
-                                            Student
-                                        </div>
-                                    </div>
-                                    <h4 className="font-bold text-lg mb-1">{cls.name}</h4>
-                                    <p className="text-sm text-muted-foreground">
-                                        Teacher: {(cls as any).teacher?.name || "Unknown"}
-                                    </p>
-                                </GlassCard>
-                            </Link>
-                        ))}
-                    </div>
-                )}
-            </div>
+            {/* Enrolled Section - ONLY for Students */}
+            {!isStaff && (
+                <div className="space-y-4">
+                    <h3 className="text-xl font-semibold flex items-center gap-2">
+                        <BookOpen className="w-5 h-5 text-blue-400" />
+                        Enrolled Classes
+                    </h3>
+                    {enrolled.length === 0 ? (
+                        <div className="text-center py-12 border border-dashed border-white/10 rounded-lg">
+                            <School className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                            <h3 className="text-lg font-medium">No classes yet</h3>
+                            <p className="text-muted-foreground mb-4">Join a class to get started!</p>
+                            <JoinClassDialog />
+                        </div>
+                    ) : (
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                            {enrolled.map((cls: any) => {
+                                if (!cls) return null;
+                                return (
+                                    <Link href={`/dashboard/classes/${cls.code}`} key={cls.id}>
+                                        <GlassCard className="h-full hover:border-blue-500/50 transition-colors p-6 cursor-pointer group">
+                                            <div className="flex justify-between items-start mb-4">
+                                                <div className="h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                    <BookOpen className="w-6 h-6 text-blue-400" />
+                                                </div>
+                                                <div className="px-2 py-1 rounded-md bg-white/5 text-xs text-muted-foreground border border-white/10">
+                                                    Student
+                                                </div>
+                                            </div>
+                                            <h4 className="font-bold text-lg mb-1">{cls.name}</h4>
+                                            <p className="text-sm text-muted-foreground">
+                                                Staff: {(cls as any).staff?.name || "Unknown"}
+                                            </p>
+                                        </GlassCard>
+                                    </Link>
+                                )
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     )
 }

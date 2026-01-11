@@ -46,7 +46,7 @@ export default async function SubjectsPage() {
 
         {subjects.length === 0 && (
           <GlassCard className="p-6 border-dashed flex flex-col items-center justify-center text-center text-muted-foreground md:col-span-3">
-            <p>No subjects found. Ask a teacher to upload notes!</p>
+            <p>No subjects found. Ask a staff to upload notes!</p>
           </GlassCard>
         )}
       </div>
