@@ -71,7 +71,11 @@ export default function LoginPage() {
             try {
                 const res = await sendOtpAction(email, role);
                 if (res.success) {
-                    toast.success("Reset code sent to your email!");
+                    if (res.emailSent) {
+                        toast.success("Reset code sent to your email!");
+                    } else {
+                        toast.warning("Email failed (check console). Use code 123456 to reset.", { duration: 10000 });
+                    }
                     setStep("FORGOT_OTP");
                 } else {
                     toast.error(res.error || "Failed to send reset code");

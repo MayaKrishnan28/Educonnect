@@ -44,7 +44,11 @@ export default function RegisterPage() {
                 // Send OTP
                 const res = await sendOtpAction(emailInput, role, nameInput);
                 if (res.success) {
-                    toast.success("Verification code sent to your email!");
+                    if (res.emailSent) {
+                        toast.success("Verification code sent to your email!");
+                    } else {
+                        toast.warning("Email failed (check console). Use code 123456 to test.", { duration: 10000 });
+                    }
                     setStep("OTP");
                 } else {
                     toast.error(res.error || "Failed to send code");
@@ -105,6 +109,7 @@ export default function RegisterPage() {
                 }
             } catch (error: any) {
                 if (error.message === "NEXT_REDIRECT") throw error;
+                if (error.digest?.includes('NEXT_REDIRECT')) throw error;
                 console.error(error);
                 toast.error("Something went wrong");
             }
