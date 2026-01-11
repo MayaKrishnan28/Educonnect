@@ -115,7 +115,7 @@ function TodoList({ items, isDone = false, isMissing = false }: { items: any[], 
 
     return (
         <div className="space-y-1">
-            {items.map((item) => (
+            {items.map((item: any) => (
                 <Link
                     key={item.id}
                     href={item.type === 'assignment'

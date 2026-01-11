@@ -45,7 +45,7 @@ export default async function DashboardPage() {
                     { label: "Hours Spent", value: "12.5", icon: Clock, color: "text-purple-400" },
                     { label: "Day Streak", value: "7", icon: Flame, color: "text-orange-400" },
                     { label: "Avg Score", value: "88%", icon: TrendingUp, color: "text-green-400" },
-                ].map((stat, i) => (
+                ].map((stat: any, i: number) => (
                     <GlassCard key={i} className="p-4 flex items-center justify-between">
                         <div>
                             <p className="text-sm text-muted-foreground">{stat.label}</p>

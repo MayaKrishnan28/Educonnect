@@ -22,7 +22,7 @@ export default async function SubjectsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {displaySubjects.map((sub) => (
+        {displaySubjects.map((sub: any) => (
           <Link href={`/dashboard/subjects/${encodeURIComponent(sub.name)}`} key={sub.name}>
             <GlassCard className="p-6 hover:bg-white/5 transition-all cursor-pointer group border-white/5 hover:border-primary/50 relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">

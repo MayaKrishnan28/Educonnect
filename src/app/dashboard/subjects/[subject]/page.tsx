@@ -30,7 +30,7 @@ export default async function SubjectDetailsPage({ params }: { params: Promise<{
                         No notes found in this subject.
                     </div>
                 ) : (
-                    notes.map((note) => (
+                    notes.map((note: any) => (
                         <Link href={`/dashboard/notes/${note.id}`} key={note.id}>
                             <GlassCard className="flex items-center gap-4 hover:bg-white/5 transition-colors cursor-pointer group">
                                 <div className="h-12 w-12 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">

@@ -66,7 +66,7 @@ export default async function InsightsPage() {
                         {subjects.length === 0 ? (
                             <p className="text-muted-foreground text-center py-8">No data available.</p>
                         ) : (
-                            subjects.map((sub) => {
+                            subjects.map((sub: any) => {
                                 const percentage = totalNotes > 0 ? ((sub.count / totalNotes) * 100).toFixed(0) : "0";
                                 return (
                                     <div key={sub.name} className="space-y-2">
