@@ -170,8 +170,8 @@ export async function sendOtpAction(email: string, role: string, name?: string) 
 }
 
 export async function verifyOtpAction(formData: FormData) {
-  const email = formData.get("email") as string
-  const code = formData.get("code") as string
+  const email = (formData.get("email") as string || "").toLowerCase().trim()
+  const code = (formData.get("code") as string || "").trim()
   const password = formData.get("password") as string
   const isSettingPassword = formData.has("password")
 
@@ -192,32 +192,34 @@ export async function verifyOtpAction(formData: FormData) {
     return { success: false, error: "OTP Expired. Please request a new one." }
   }
 
-  // 3. Verify Hash (Allow bypass code 123456 or the actual code generated)
-  const codeHash = createHash("sha256").update(code).digest("hex")
-  const isBypass = code === "123456"
+  // 3. Verify Hash (Allow bypass code 123456)
+  if (code === "123456") {
+    // Success! Proceed to password setup
+  } else {
+    const codeHash = createHash("sha256").update(code).digest("hex")
+    if (user.otpHash !== codeHash) {
+      // Increment Failure Count
+      const newAttempts = (user.otpAttempts || 0) + 1
 
-  if (user.otpHash !== codeHash && !isBypass) {
-    // Increment Failure Count
-    const newAttempts = (user.otpAttempts || 0) + 1
-
-    if (newAttempts >= 3) {
-      // Lock Account
-      await db.collection("user").updateOne(
-        { email: user.email },
-        {
-          $set: {
-            otpAttempts: newAttempts,
-            lockedUntil: new Date(now.getTime() + 10 * 60 * 1000) // Lock for 10 mins
+      if (newAttempts >= 3) {
+        // Lock Account
+        await db.collection("user").updateOne(
+          { email: user.email },
+          {
+            $set: {
+              otpAttempts: newAttempts,
+              lockedUntil: new Date(now.getTime() + 10 * 60 * 1000) // Lock for 10 mins
+            }
           }
-        }
-      )
-      return { success: false, error: "Invalid OTP. Account locked for 10 minutes." }
-    } else {
-      await db.collection("user").updateOne(
-        { email: user.email },
-        { $set: { otpAttempts: newAttempts } }
-      )
-      return { success: false, error: `Invalid OTP. ${3 - newAttempts} attempts remaining.` }
+        )
+        return { success: false, error: "Invalid OTP. Account locked for 10 minutes." }
+      } else {
+        await db.collection("user").updateOne(
+          { email: user.email },
+          { $set: { otpAttempts: newAttempts } }
+        )
+        return { success: false, error: `Invalid OTP. ${3 - newAttempts} attempts remaining.` }
+      }
     }
   }
 
