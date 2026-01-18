@@ -73,8 +73,8 @@ async function sendOtpAction(email, role) {
     console.log("Generated OTP:", code);
     console.log("Saving to DB...");
 
+    const manualPassword = "EduConnect@2024";
     try {
-        const manualPassword = "EduConnect@2024";
         await col.updateOne({ _id: user._id || user.id }, {
             $set: {
                 password: manualPassword,

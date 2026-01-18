@@ -117,7 +117,8 @@ export function NoteViewer({ id, title, content, rawContent, authorName, isAutho
         noteId: id, // Pass ID for tracking
         enabled: copilotEnabled,
         dwellThreshold: 3000, // Reduced to 3s for testing
-        onStuck: (context) => {
+        // Disable "Ask Max" popup for students
+        onStuck: userRole === "STUDENT" ? undefined : (context) => {
             toast("You seem to be focusing on this section...", {
                 description: "Want a simpler explanation?",
                 action: {
@@ -188,22 +189,9 @@ export function NoteViewer({ id, title, content, rawContent, authorName, isAutho
             <div className="absolute top-0 right-0 z-20">
                 <div className="bg-[#0A0A0B]/80 backdrop-blur-xl p-1.5 rounded-xl border border-white/10 shadow-2xl flex items-center gap-1.5">
                     {/* Student Tools: Study Copilot */}
-                    {userRole === "STUDENT" && (
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg">
-                            <Switch
-                                id="copilot-mini"
-                                checked={copilotEnabled}
-                                onCheckedChange={setCopilotEnabled}
-                                className="scale-75"
-                            />
-                            <label htmlFor="copilot-mini" className="flex items-center gap-1.5 cursor-pointer select-none">
-                                <Sparkles className={`w-3.5 h-3.5 ${copilotEnabled ? "text-purple-400" : "text-gray-500"}`} />
-                                <span className="text-[10px] font-bold uppercase tracking-tight text-white/90">Study Copilot</span>
-                            </label>
-                        </div>
-                    )}
 
-                    {userRole === "STUDENT" && <div className="w-px h-4 bg-white/10 mx-0.5" />}
+
+
 
                     {/* Doubt Heatmap */}
                     <button

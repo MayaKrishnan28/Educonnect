@@ -18,6 +18,9 @@ import { EditClassDialog } from "@/components/lms/edit-class-dialog"
 import { ClassMembersList } from "@/components/lms/class-members-list"
 import { DeleteClassButton } from "@/components/lms/delete-class-button"
 import { deleteAssignmentAction, deleteQuizAction, deleteClassNoteAction } from "@/app/actions-lms"
+import { CreatePostInput } from "@/components/lms/create-post-input"
+import { StreamItem } from "@/components/lms/stream-item"
+
 
 import { getSession } from "@/lib/auth"
 
@@ -49,6 +52,33 @@ export default async function ClassPage({ params }: { params: Promise<{ code: st
     classData.assignments = await db.collection('assignment').find({ courseId: classId }).sort({ createdAt: -1 }).toArray()
     classData.quizzes = await db.collection('quiz').find({ courseId: classId }).sort({ createdAt: -1 }).toArray()
     classData.notes = await db.collection('note').find({ courseId: classId }).sort({ createdAt: -1 }).toArray()
+    classData.posts = await db.collection('post').find({ courseId: classId }).sort({ createdAt: -1 }).toArray() || []
+
+    // Fetch comments for all types
+    const entityIds = [
+        ...classData.assignments.map((a: any) => a.id),
+        ...classData.quizzes.map((q: any) => q.id),
+        ...classData.posts.map((p: any) => p.id)
+    ]
+
+    const allComments = await db.collection('comment').find({ entityId: { $in: entityIds } }).sort({ createdAt: 1 }).toArray()
+    const commentMap = allComments.reduce((acc: any, c: any) => {
+        if (!acc[c.entityId]) acc[c.entityId] = []
+        acc[c.entityId].push({ ...c, id: c.id || c._id.toString() })
+        return acc
+    }, {})
+
+    // Attach comments to items
+    const attachComments = (item: any) => ({
+        ...item,
+        comments: commentMap[item.id] || []
+    })
+
+    classData.assignments = classData.assignments.map(attachComments)
+    classData.quizzes = classData.quizzes.map(attachComments)
+    classData.posts = classData.posts.map(attachComments)
+
+
 
     // Populate authors for notes
     classData.notes = await Promise.all(classData.notes.map(async (note: any) => {
@@ -106,8 +136,9 @@ export default async function ClassPage({ params }: { params: Promise<{ code: st
         )
     }
 
-    // Merge feedItems ( Assignments + Quizzes )
+    // Merge feedItems ( Posts + Assignments + Quizzes )
     const feedItems = [
+        ...serializedClass.posts.map((p: any) => ({ ...p, type: 'post' as const })),
         ...serializedClass.assignments.map((a: any) => ({ ...a, type: 'assignment' as const })),
         ...serializedClass.quizzes.map((q: any) => ({ ...q, type: 'quiz' as const }))
     ].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -168,71 +199,22 @@ export default async function ClassPage({ params }: { params: Promise<{ code: st
                                     <Calendar className="w-5 h-5 text-purple-400" /> &nbsp;Latest Updates
                                 </h2>
 
+                                {/* Create Post Input */}
+                                <CreatePostInput courseId={serializedClass.id} isStaff={isStaff} />
+
                                 {feedItems.length === 0 ? (
                                     <div className="text-center py-12 border border-dashed border-white/10 rounded-lg">
                                         <p className="text-muted-foreground">No updates, assignments, or quizzes yet.</p>
                                     </div>
                                 ) : (
                                     feedItems.map((item: any) => (
-                                        <GlassCard key={item.id} className="p-6 hover:border-purple-500/30 transition-colors relative overflow-hidden group">
-                                            <div className={`absolute top-0 left-0 w-1 h-full ${item.type === 'assignment' ? 'bg-purple-500' : 'bg-indigo-500'}`} />
-                                            <div className="flex justify-between items-start pl-2">
-                                                <div className="flex-grow">
-                                                    <div className="flex items-center gap-2 mb-2">
-                                                        {item.type === 'assignment' ? (
-                                                            <span className="text-[10px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded">Assignment</span>
-                                                        ) : (
-                                                            <span className="text-[10px] uppercase tracking-wider font-bold bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded flex items-center gap-1">
-                                                                <Sparkles className="w-3 h-3" /> AI Quiz
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex justify-between items-start">
-                                                        <h3 className="font-bold text-lg mb-1">{item.title}</h3>
-                                                        {isStaff && (
-                                                            <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <DeleteLMSItemButton
-                                                                    id={item.id}
-                                                                    courseId={serializedClass.id}
-                                                                    itemName={item.type === 'assignment' ? "Assignment" : "Quiz"}
-                                                                    action={item.type === 'assignment' ? deleteAssignmentAction : deleteQuizAction}
-                                                                />
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-muted-foreground text-sm mb-4 line-clamp-2 max-w-xl">
-                                                        {item.type === 'assignment' ? (item as any).description : `Topic: ${(item as any).topic} • ${(item as any)._count?.questions || 0} Questions`}
-                                                    </p>
-                                                </div>
-                                                {item.type === 'assignment' && (item as any).dueDate && (
-                                                    <div className="text-right text-sm text-red-400 font-medium bg-red-500/10 px-3 py-1 rounded-full whitespace-nowrap ml-4">
-                                                        Due {format((item as any).dueDate!, 'MMM d')}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="mt-2 pt-2 border-t border-white/5 flex justify-end">
-                                                {item.type === 'assignment' ? (
-                                                    <Button variant="ghost" size="sm" className="hover:bg-white/5">
-                                                        Submit Work →
-                                                    </Button>
-                                                ) : (
-                                                    <div className="flex gap-2">
-                                                        {isStaff && (
-                                                            <Link href={`/dashboard/quiz/${item.id}/results`}>
-                                                                <Button variant="outline" size="sm" className="hover:bg-white/5 border-purple-500/30 text-purple-300">
-                                                                    Results & Analytics
-                                                                </Button>
-                                                            </Link>
-                                                        )}
-                                                        <Link href={`/dashboard/quiz/${item.id}`}>
-                                                            <Button variant="ghost" size="sm" className="hover:bg-white/5">
-                                                                {isStaff ? "Preview Quiz" : "Start Quiz →"}
-                                                            </Button>
-                                                        </Link>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </GlassCard>
+                                        <StreamItem
+                                            key={item.id}
+                                            item={item}
+                                            courseId={serializedClass.id}
+                                            currentUserId={userId}
+                                            isStaff={isStaff}
+                                        />
                                     ))
                                 )}
                             </div>
