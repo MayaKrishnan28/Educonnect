@@ -310,6 +310,9 @@ export default async function ClassPage({ params }: { params: Promise<{ code: st
                             <div className="flex justify-between items-center mb-4">
                                 <h2 className="text-xl font-semibold flex items-center gap-2">
                                     <Users className="w-5 h-5 text-blue-400" /> Class Members
+                                    <span className="text-sm font-normal text-muted-foreground ml-2 rounded-full bg-white/5 px-2 py-0.5">
+                                        {serializedClass._count.enrollments + 1}
+                                    </span>
                                 </h2>
                             </div>
                             <ClassMembersList courseId={serializedClass.id} />
